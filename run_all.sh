@@ -19,7 +19,6 @@ q experiments/innoise.py --model llama-1b --dtype bf16 --n 12
 q experiments/innoise.py --model llama-1b --dtype fp32 --n 8
 q experiments/cost.py --model llama-1b
 q experiments/forge.py --model llama-1b --n 12 --long 8000
-q experiments/forge.py --model llama-1b --n 8 --long 16000
 q experiments/adaptive.py --model qwen-0.5b --n 16
 q experiments/corrupt.py --model qwen-0.5b --n 12
 q experiments/innoise.py --model qwen-0.5b --dtype bf16 --n 12
