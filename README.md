@@ -45,8 +45,10 @@ kv-notary shows that this trust is easy to abuse and cheap to verify.
   catches it, except at the last layer.
 - **Bit flips:** about 5% of random single-bit flips change the output. The harmful ones are almost all the
   top exponent bit, and a free range check catches every one of those.
-- **The bf16 tolerance is not a hiding place.** Attacks that stay inside it never flipped an answer. The
-  quietest successful attack still left 8 of 446 columns failing.
+- **The bf16 tolerance is a small but real hiding place.** Spreading a tiny nudge over every column
+  usually fails or breaks hundreds of columns. But in 1 of 12 Qwen tasks it flipped the answer with every
+  column inside tolerance, which no audit can catch. Closing that gap needs deterministic kernels, not a
+  smarter audit (in fp32 the same attacks light up hundreds of columns).
 - **Adaptive attackers win the deterministic part.** A white-box forger that knows the scoring rule can
   push its column out of the top 30 and still flip the answer in about half of the tasks. Different scores
   disagree about where it lands, so an ensemble helps, but only the random part of an audit gives a
