@@ -531,6 +531,7 @@ def sec_cost():
         a = r["influence"] + r["cols16"]
         rows.append([r["T"], f"{r['kv_mb']:.0f}", f"{r['prefill'] * 1e3:.0f}", f"{r['influence'] * 1e3:.1f}",
                      f"{r['cols8'] * 1e3:.1f}", f"{r['cols16'] * 1e3:.1f}", f"{r['cols64'] * 1e3:.1f}",
+                     f"{r['graph16'] * 1e3:.1f}" if "graph16" in r else "–",
                      f"{r['trace32'] * 1e3:.0f}" if "trace32" in r else "–",
                      f"{r['full_check'] * 1e3:.0f}" if "full_check" in r else "–", pct(a / r["prefill"], 1)])
     big = COST["rows"][-1]
@@ -544,11 +545,15 @@ def sec_cost():
         f"{pct(S['cost']['frac'], 1)} at {big['T']} tokens. The audit has a floor of about 30 ms: our unfused PyTorch code launches dozens of small kernels per layer, so on short documents it costs as much as a prefill. "
         "Above that floor, the prefill grows quadratically in T while the audit is a fixed number of tokens attending to T columns, so the gap widens with length. "
         "Our implementation is plain PyTorch with explicit attention for the audited rows. The prefill uses SDPA. "
+        + (f"Most of that floor is CPU time spent launching about 1,100 small kernels; the GPU work for 16 columns is about one read of the weights. "
+           f"Capturing the audit as a CUDA graph (<code>kvnotary.fast.GraphedAudit</code>, bit-identical output) cuts 16 columns at {COST['rows'][0]['T']} tokens "
+           f"from {COST['rows'][0]['cols16'] * 1e3:.0f} ms to {COST['rows'][0]['graph16'] * 1e3:.0f} ms. "
+           if "graph16" in COST["rows"][0] else "")
         + (f"A traced audit of 32 columns runs its recomputation in about five sequential rounds, so it pays the floor several times: "
            f"{big['trace32'] * 1e3:.0f} ms at {big['T']} tokens, {pct(big['trace32'] / big['prefill'], 1)} of the prefill. "
            "Fusing those rounds into one kernel launch each would bring it close to the plain audit." if "trace32" in big else "")
         + "</p>",
-        table(["T", "KV (MiB)", "prefill (ms)", "influence (ms)", "8 cols (ms)", "16 cols (ms)", "64 cols (ms)", "trace 32 (ms)", "full check (ms)",
+        table(["T", "KV (MiB)", "prefill (ms)", "influence (ms)", "8 cols (ms)", "16 cols (ms)", "64 cols (ms)", "16 cols, CUDA graph (ms)", "trace 32 (ms)", "full check (ms)",
                "influence + 16 / prefill"], rows, "small"),
         "<p class='cap'>Table 10. Median wall-clock time of 5 runs.</p>",
         fig("cost", "Figure 9. Time for prefill, a full check, and audits of 16 and 64 columns, by document length.")])
