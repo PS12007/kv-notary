@@ -156,3 +156,15 @@ def test_trace_rows(pair):
     s = np.random.default_rng(0).random(len(IDS))
     cols = trace_plan(m, IDS, c, [s], 20)
     assert len(cols) == len(set(cols)) <= 20 and cols[:4] == [0, 1, 2, 3]
+
+
+def test_notary_rejects_forgery_accepts_honest(pair):
+    from kvnotary import Notary
+    _, m = pair
+    _, c = m.prefill(IDS)
+    notary = Notary(m, thresholds=torch.full((m.L,), 1e-3), k_top=len(IDS), k_rand=0)
+    q = [5, 6, 7]
+    assert notary.audit(IDS, c, q).ok
+    fc = forge_cache(m, IDS, 1, [50], torch.randn(1, m.d) * 5)
+    v = notary.audit(IDS, fc, q)
+    assert not v.ok and v.failed == [50]
