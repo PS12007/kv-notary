@@ -39,6 +39,7 @@ ap.add_argument("--hide", type=int, default=28)
 ap.add_argument("--secrets", type=int, default=32)
 ap.add_argument("--start", type=int, default=600, help="first task seed")
 ap.add_argument("--tag", default="", help="suffix for the result file (more seeds, merged when read)")
+ap.add_argument("--only", default="", help="comma-separated attacker names to run (default: all but exact trace)")
 args = ap.parse_args()
 
 m = Model(args.model)
@@ -47,7 +48,10 @@ layer = m.L // 2
 BUDGETS = (16, 32, 64)
 ATTACKERS = [("none", ["mean"], 0.0), ("mean", ["mean"], 1.0), ("layermax", ["layermax"], 1.0),
              ("headmax", ["headmax"], 1.0), ("tokmax", ["tokmax"], 1.0),
-             ("all public", list(SCORES), 1.0), ("all public + trace", list(SCORES) + ["trace"], 1.0)]
+             ("all public", list(SCORES), 1.0), ("all public + trace", list(SCORES) + ["trace"], 1.0),
+             ("all public + exact trace", list(SCORES) + ["trace_exact"], 1.0)]
+ATTACKERS = ([a for a in ATTACKERS if a[0] in args.only.split(",")] if args.only
+             else [a for a in ATTACKERS if a[0] != "all public + exact trace"])
 key_rng = np.random.default_rng(12345)
 KEYS = [secret_key(m, key_rng) for _ in range(args.secrets)]  # the verifier's secrets
 recs = []

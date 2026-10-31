@@ -16,11 +16,12 @@ attacker's target answer, computed by the trusted suffix pass over the tampered 
 """
 from __future__ import annotations
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
 from .model import Cache, Model
-from .verify import vw_score
+from .verify import merge_plan, vw_score
 
 
 def answer_nll(m: Model, cache: Cache, suf, tgt, want_attn=False):
@@ -175,7 +176,7 @@ def _trace_rows(m: Model, cache: Cache, pa, Q, T, n_sinks=4):
 
 def stealth_forge(m: Model, pre, suf, tgt, layer: int, positions, hide_k: int = 4, steps=80, lr=0.1,
                   rel_budget=1.0, lam=1.0, n_sinks=4, margin=0.7, stop_nll=0.05, score_mode="mean",
-                  trace_first=12):
+                  trace_first=12, trace_budget=32):
     """A forgery that knows the audit checks the `hide_k` most-read non-sink columns.
 
     Loss = answer NLL + lam * mean_j relu(log s_j - log(margin * s_thr)), where s_j is the
@@ -213,7 +214,7 @@ def stealth_forge(m: Model, pre, suf, tgt, layer: int, positions, hide_k: int = 
         opt.zero_grad()
         d = delta()
         hook = lambda i, x: x.index_add(0, P, d.to(x.dtype)) if i == layer else x  # noqa: E731
-        _, c, pa = m.run(pre, resid_hook=hook, want_attn="full" if "trace" in modes else False)
+        _, c, pa = m.run(pre, resid_hook=hook, want_attn="full" if any(md.startswith("trace") for md in modes) else False)
         lg, _, a = m.run(readers, past=c, all_logits=True, want_attn="full")
         nll = F.cross_entropy(lg[len(suf) - 1:], torch.as_tensor(tgt, device=lg.device))
         hide, hidden = 0.0, True
@@ -229,7 +230,38 @@ def stealth_forge(m: Model, pre, suf, tgt, layer: int, positions, hide_k: int = 
             thr = hop[others].detach().topk(hide_k).values[-1] * margin
             hide = hide + torch.relu(torch.log(hop[P] + 1e-9) - torch.log(thr)).mean()
             hidden = hidden and bool((hop[P].detach() < thr / margin).all())
-        for mode in [md for md in modes if md != "trace"]:  # hide from every score the audit uses
+        if "trace_exact" in modes:  # replay the verifier's own trace_plan on this cache
+            pub = [md for md in modes if not md.startswith("trace")] or ["layermax"]
+            S = [_vw_scores(m, c, a, T, md, n_sinks) for md in pub]
+            Snp = []
+            for x in S:
+                x = x.detach().double().cpu().numpy().copy()
+                x[:n_sinks] = np.inf
+                Snp.append(x)
+            cols = merge_plan(Snp, trace_budget // 2, n_sinks)
+            allrows = _trace_rows(m, c, pa, torch.arange(T, device=m.device), T, n_sinks)  # [T, T]
+            w = {q: 1.0 for q in cols[n_sinks:]}
+            todo, hop = list(cols[n_sinks:]), torch.zeros(T, device=m.device)
+            step = max(2, trace_budget // 8)
+            while len(cols) < trace_budget:
+                if todo:
+                    wq = torch.as_tensor([w[q] for q in todo], device=m.device)[:, None]
+                    hop = torch.maximum(hop, (wq * allrows[todo]).amax(0))
+                cand = hop.detach().clone()
+                cand[cols] = -1
+                nxt = [int(j) for j in torch.argsort(-cand)[: trace_budget - len(cols)][:step] if cand[j] > 0]
+                if not nxt:
+                    break
+                for j in nxt:
+                    w[j] = float(cand[j] / cand[nxt[0]])
+                cols += nxt
+                todo = nxt
+            # stay below the weakest column the traced rounds picked
+            traced = [j for j in cols if w.get(j, 0) < 1.0] or cols[n_sinks:]
+            thr = hop.detach()[traced].min() * margin
+            hide = hide + torch.relu(torch.log(hop[P] + 1e-9) - torch.log(thr.clamp_min(1e-9))).mean()
+            hidden = hidden and not any(int(p) in cols for p in P)
+        for mode in [md for md in modes if not md.startswith("trace")]:  # hide from every score the audit uses
             s = _vw_scores(m, c, a, T, mode, n_sinks)
             thr = s[others].detach().topk(hide_k).values[-1] * margin
             hide = hide + torch.relu(torch.log(s[P] + 1e-9) - torch.log(thr)).mean()

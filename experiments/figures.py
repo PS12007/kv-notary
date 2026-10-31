@@ -270,7 +270,7 @@ def load_defense(mk):
     return {**parts[0], "records": [r for x in parts for r in x["records"]]} if parts else None
 
 
-DEF_ATT = ["none", "mean", "layermax", "headmax", "tokmax", "all public", "all public + trace"]
+DEF_ATT = ["none", "mean", "layermax", "headmax", "tokmax", "all public", "all public + trace", "all public + exact trace"]
 DEF_PLANS = [("mean", "mean"), ("layermax", "layermax"), ("headmax", "headmax"), ("tokmax", "tokmax"),
              ("grad", "gradient"), ("all public", "all public|merged"), ("secret", "secret|heads"),
              ("trace", "trace"), ("trace + random", "trace +|random"), ("random", "random")]

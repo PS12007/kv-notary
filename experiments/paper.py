@@ -321,7 +321,7 @@ def adaptive_text():
     return "".join(parts)
 
 
-DEF_ATT = ["none", "mean", "layermax", "headmax", "tokmax", "all public", "all public + trace"]
+DEF_ATT = ["none", "mean", "layermax", "headmax", "tokmax", "all public", "all public + trace", "all public + exact trace"]
 DEF_PLANS = [("mean", "mean"), ("layermax", "layermax"), ("headmax", "headmax"), ("tokmax", "tokmax"), ("grad", "gradient"),
              ("all public", "all public merged"), ("secret", "secret heads"), ("trace", "trace"),
              ("trace + random", "trace + random"), ("random", "random")]
@@ -449,7 +449,7 @@ def defense_text():
             "budget. And all of these are games against our optimiser (150 Adam steps, one hinge loss per score), so the rates describe a modest white-box "
             "attacker, not a bound. Random columns give the only attacker-independent guarantee, and at k/T it is a weak one.</p>")
     return ("<p><b>The game.</b> An audit plan is only as good as the attacker's best reply to it. For each plan, Table 6 gives the share of tasks in which the "
-            "<i>best</i> of our seven attackers both flips the answer and escapes the audit (success rate × miss rate, maximised over attackers). "
+            "<i>best</i> of our attackers both flips the answer and escapes the audit (success rate × miss rate, maximised over attackers). "
             + ". ".join(notes) + ".</p>"
             + table(head, rows, "small")
             + "<p class='cap'>Table 6. Worst-case attacker win rate per audit plan (lower is better for the verifier), at audit budgets of 16, 32 and 64 columns.</p>"
@@ -723,7 +723,7 @@ def abstract():
             f"against {pct(ll['uni']['64'])} for 64 random columns" + (f", and {pct(lt['top']['32'])} with 32 columns at {lt['T']:.0f} tokens" if lt else "") + ". "
             f"Attacks that try to hide inside the bf16 tolerance usually fail or leave many columns failing, but one in 12 Qwen tasks fell to a forgery that stayed entirely inside it, so the tolerance itself is an attack surface that only deterministic kernels can close. A white-box attacker that knows the scoring rule can push its column down the ranking, "
             f"Hidden forgeries often reach the question through later columns that read them, so we also trace the audit: follow what the most-read columns "
-            f"themselves read, using attention rows the recomputation yields for free. In a game of 7 attackers against 10 audit plans, tracing is the only plan that is "
+            f"themselves read, using attention rows the recomputation yields for free. In a game of 8 attackers against 10 audit plans, tracing is the only plan that is "
             f"best or tied-best on both models (the attacker's best reply wins {GAME_TXT['trace']} of the time, against {GAME_TXT['mean']} for the default score). "
             f"No deterministic plan is a guarantee, and random columns remain the only "
             f"attacker-independent one. Code, data and an interactive demo are public.</div>")
