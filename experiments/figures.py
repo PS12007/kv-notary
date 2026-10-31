@@ -274,8 +274,8 @@ def fig_defense(B="32"):
         return
     from matplotlib.colors import LinearSegmentedColormap
     cmap = LinearSegmentedColormap.from_list("seq", ["#f2f6fc", "#9cc0ec", C["blue"], "#16437a"])
-    fig, axes = plt.subplots(1, len(ds), figsize=(6.2 * len(ds), 4.2), squeeze=False)
-    for ax, (mk, lab, d) in zip(axes[0], ds):
+    fig, axes = plt.subplots(len(ds), 1, figsize=(8.6, 3.9 * len(ds)), squeeze=False)
+    for ax, (mk, lab, d) in zip(axes[:, 0], ds):
         R = d["records"]
         atts = [a for a in DEF_ATT if any(r["attacker"] == a for r in R)]
         M = np.full((len(atts), len(DEF_PLANS)), np.nan)
@@ -301,7 +301,8 @@ def fig_defense(B="32"):
         ax.grid(False)
         for sp in ax.spines.values():
             sp.set_visible(False)
-    fig.suptitle("Round two: audits against forgers that know the public scores (32 columns audited)", y=1.02)
+    fig.suptitle("Round two: audits against forgers that know the public scores (32 columns audited)", y=1.0)
+    fig.tight_layout()
     save(fig, "defense")
 
 
