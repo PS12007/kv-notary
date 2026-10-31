@@ -259,9 +259,54 @@ def fig_cost():
     ax.set_title("What an audit costs (Llama-3.2-1B, bf16)")
     save(fig, "cost")
 
+# ------------------------------------------------------------------ fig: defenses vs adaptive forgers
+DEF_ATT = ["none", "mean", "layermax", "headmax", "tokmax", "all public", "all public + trace"]
+DEF_PLANS = [("mean", "mean"), ("layermax", "layermax"), ("headmax", "headmax"), ("tokmax", "tokmax"),
+             ("grad", "gradient"), ("all public", "all public|merged"), ("secret", "secret|heads"),
+             ("trace", "trace"), ("trace + random", "trace +|random"), ("random", "random")]
+
+
+def fig_defense(B="32"):
+    ds = [(mk, lab, load(f"defense_{mk}.json")) for mk, lab in MODELS]
+    ds = [x for x in ds if x[2]]
+    if not ds:
+        return
+    from matplotlib.colors import LinearSegmentedColormap
+    cmap = LinearSegmentedColormap.from_list("seq", ["#f2f6fc", "#9cc0ec", C["blue"], "#16437a"])
+    fig, axes = plt.subplots(1, len(ds), figsize=(6.2 * len(ds), 4.2), squeeze=False)
+    for ax, (mk, lab, d) in zip(axes[0], ds):
+        R = d["records"]
+        atts = [a for a in DEF_ATT if any(r["attacker"] == a for r in R)]
+        M = np.full((len(atts), len(DEF_PLANS)), np.nan)
+        ylab = []
+        for i, a in enumerate(atts):
+            rs = [r for r in R if r["attacker"] == a]
+            ok = [r for r in rs if r["success"]]
+            ylab.append(f"{'no hiding' if a == 'none' else 'hides from ' + a}  ({len(ok)}/{len(rs)})")
+            for j, (pk, _) in enumerate(DEF_PLANS):
+                if ok:
+                    M[i, j] = np.mean([r["detect"][B][pk] for r in ok])
+        ax.imshow(M, cmap=cmap, vmin=0, vmax=1, aspect="auto")
+        for i in range(M.shape[0]):
+            for j in range(M.shape[1]):
+                if np.isfinite(M[i, j]):
+                    ax.text(j, i, f"{100 * M[i, j]:.0f}", ha="center", va="center", fontsize=8,
+                            color="white" if M[i, j] > 0.55 else C["ink"])
+        ax.set_xticks(range(len(DEF_PLANS)), [x[1].replace("|", " ") for x in DEF_PLANS], fontsize=7.5,
+                      rotation=35, ha="right", rotation_mode="anchor")
+        ax.set_yticks(range(len(atts)), ylab, fontsize=8)
+        ax.set_xlabel(f"how the verifier picks {B} columns", fontsize=9)
+        ax.set_title(f"{lab}: % of successful forgeries caught", fontsize=10)
+        ax.grid(False)
+        for sp in ax.spines.values():
+            sp.set_visible(False)
+    fig.suptitle("Round two: audits against forgers that know the public scores (32 columns audited)", y=1.02)
+    save(fig, "defense")
+
+
 
 if __name__ == "__main__":
-    for f in (fig_forge_success, fig_budget, fig_detection, fig_corrupt, fig_adaptive, fig_innoise, fig_cost):
+    for f in (fig_forge_success, fig_budget, fig_detection, fig_corrupt, fig_adaptive, fig_innoise, fig_cost, fig_defense):
         try:
             f()
         except Exception as ex:  # keep going: partial results are normal mid-run
