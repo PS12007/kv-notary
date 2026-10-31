@@ -23,7 +23,12 @@ q experiments/forge.py --model llama-1b --n 8 --long 16000
 q experiments/adaptive.py --model qwen-0.5b --n 16
 q experiments/corrupt.py --model qwen-0.5b --n 12
 q experiments/innoise.py --model qwen-0.5b --dtype bf16 --n 12
-q experiments/adaptive.py --model llama-1b --n 16 --baseline_only
+q experiments/defense.py --model llama-1b --n 12
+q experiments/defense.py --model qwen-0.5b --n 12
+q experiments/defense.py --model llama-1b --n 12 --start 700 --tag b
+q experiments/defense.py --model qwen-0.5b --n 12 --start 700 --tag b
+q experiments/crossstack.py --model llama-1b --n 24
+q experiments/crossstack.py --model qwen-0.5b --n 24
 q experiments/export_demo.py --model llama-1b
 q experiments/export_demo.py --model qwen-0.5b
 $PY experiments/figures.py

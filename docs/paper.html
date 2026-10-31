@@ -68,7 +68,7 @@ code{font-size:13px}.refs{font-size:13.5px}
 <ul>
 <li><b>Scale.</b> Two small models (0.5B and 1.2B parameters), memo-style factual QA with one-token-ish answers, and documents up to ~2K tokens (the attack backpropagates through the whole prefill, which did not fit in 8 GB at ~4K; the audit itself was timed up to 16K). Larger models have more layers and heads, so influence may concentrate differently.</li>
 <li><b>Known question.</b> The attacker optimises for a question it anticipates, and our audit reads the influence of the question actually asked. An attacker that has to work across many questions has a harder job, and an audit across many questions has more readers. We did not measure either.</li>
-<li><b>Determinism.</b> The tolerance τ is calibrated on our own kernels. A real deployment with heterogeneous prefill and decode hardware would need calibration across kernel pairs, and τ would grow.</li>
+<li><b>Determinism.</b> The tolerance τ has to be calibrated for each pair of prefill and verification stacks (§7.1). We measured one pair, transformers SDPA against our own kernels, on one GPU. Heterogeneous hardware, quantised caches or different attention kernels would each need their own calibration, and τ may grow.</li>
 <li><b>Adaptive attacker.</b> Our adaptive forgers are white-box but simple: one hinge loss per score and 100–150 Adam steps. Stronger optimisers will hide better. §6 should be read as a lower bound on what an adaptive attacker can do.</li>
 <li><b>Not a MAC.</b> The check proves that a cache is consistent with its tokens and weights. It says nothing about whether the tokens themselves are the right ones. That is the ordinary job of authenticating the prompt.</li>
 </ul>
