@@ -159,8 +159,9 @@ def fig_corrupt():
         ys = [np.mean([e["n_flagged"] / max(e["n_after"], 1) for e in E if e["layer"] == l and e["kind"] == kind]) for l in layers]
         ax.plot(layers, ys, "-o", color=col, label=lab, markersize=6)
     ax.set_xlabel("layer edited in place")
+    ax.set_xticks(layers, [str(l) for l in layers])
     ax.set_ylabel("share of later columns that fail")
-    ax.set_title("In-place edits contaminate everything downstream")
+    ax.set_title("In-place edits break later columns")
     ax.set_ylim(0, 1.05)
     ax.legend(fontsize=8.5)
     ax = axes[1]
@@ -173,7 +174,7 @@ def fig_corrupt():
     ax.bar(x + 0.2, ch, 0.38, color=C["red"], label="answer changes")
     ax.set_xticks(x, [str(b) for b in bits], fontsize=8)
     ax.set_xlabel("bf16 bit flipped (15 sign, 14-7 exponent, 6-0 mantissa)")
-    ax.set_title("Single bit flips: only high exponent bits matter")
+    ax.set_title("Bit flips: the top exponent bit matters")
     ax.legend(fontsize=8.5, loc="upper left")
     ax.set_ylim(0, 1.05)
     save(fig, "corrupt")
