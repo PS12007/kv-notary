@@ -602,8 +602,8 @@ def abstract():
             f"against {pct(ll['uni']['64'])} for 64 random columns" + (f", and {pct(lt['top']['32'])} with 32 columns at {lt['T']:.0f} tokens" if lt else "") + ". "
             f"Attacks that try to hide inside the bf16 tolerance usually fail or leave many columns failing, but one in 12 Qwen tasks fell to a forgery that stayed entirely inside it, so the tolerance itself is an attack surface that only deterministic kernels can close. A white-box attacker that knows the scoring rule can push its column down the ranking, "
             f"Hidden forgeries often reach the question through later columns that read them, so we also trace the audit: follow what the most-read columns "
-            f"themselves read, using attention rows the recomputation yields for free. In a game of 7 attackers against 10 audit plans, tracing is the only plan "
-            f"that holds the attacker's best reply well below the default on both models. No deterministic plan is a guarantee, and random columns remain the only "
+            f"themselves read, using attention rows the recomputation yields for free. In a game of 7 attackers against 10 audit plans, tracing has the best worst case "
+            f"averaged over both models (the attacker's best reply wins 42% and 58% of the time, against 92% for the default score). No deterministic plan is a guarantee, and random columns remain the only "
             f"attacker-independent one. Code, data and an interactive demo are public.</div>")
 
 

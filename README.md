@@ -67,7 +67,7 @@ kv-notary shows that this trust is easy to abuse and cheap to verify.
   | **tracing** | 42% | **58%** |
 
   *(share of tasks where the best attacker both flips the answer and escapes the audit; lower is better)*.
-  Tracing is the only plan that does well on both models. No deterministic plan is a guarantee.
+  Tracing has the best worst case averaged over the two models. No deterministic plan is a guarantee.
 
   <p align="center"><img src="docs/figures/game.png" width="700"></p>
 
