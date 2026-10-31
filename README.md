@@ -12,6 +12,8 @@ encodes the tokens it came with. Nothing checks.
 
 kv-notary shows that this trust is easy to abuse and cheap to verify.
 
+<p align="center"><img src="docs/figures/overview.svg" width="860" alt="prefill worker ships a KV cache with one forged column; the decode node recomputes and traces a few columns"></p>
+
 | | Llama-3.2-1B | Qwen2.5-0.5B |
 |---|---|---|
 | one forged column (of ~440) flips the answer to the attacker's value | **86%** | **80%** |
