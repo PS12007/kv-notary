@@ -562,18 +562,21 @@ def sec_multiq():
                 "all": mean(r["union_all_caught32"] for r in ok)}
             rows.append([name, "plain forger" if att == "plain" else "stealth forger (hides from target question)", f"{len(ok)}/{len(R)}",
                          pct(x["collateral"]), pct(x["clean"]), pct(x["own"]), pct(x["other"]), pct(x["union"]), pct(x["all"])])
-    k0 = next(k for k, _ in MODELS if (k, "stealth") in st)
-    pl, sl = st.get((k0, "plain")), st.get((k0, "stealth"))
+    ks = [k for k, _ in MODELS if (k, "plain") in st and (k, "stealth") in st]
+
+    def both(att, key):
+        return " and ".join(pct(st[(k, att)][key]) for k in ks)
     txt = ""
-    if pl and sl:
-        txt = (f"<p>On {dict(MODELS)[k0]}, a plain single-column forgery changes {pct(pl['collateral'])} of the other answers in the memo, "
-               f"and only {pct(pl['clean'])} of plain forgeries leave every other answer intact. A user asking several questions would often notice. "
-               f"The stealth forger, which only tries to hide from the target question's audit, is far more surgical: it changes {pct(sl['collateral'])} "
-               f"of other answers, and {pct(sl['clean'])} of its forgeries change nothing else. Hiding from the target question also hides from the others: "
-               f"a 32-column audit driven by a single other question catches {pct(sl['other'])} of stealth forgeries, and one driven by all nine other questions "
-               f"together catches {pct(sl['union'])}. Other questions do not read the forged column, which is what makes the attack targeted. "
-               f"An audit is only as good as the question that drives it. Questions the attacker anticipated are the ones that matter, and an audit driven by "
-               f"other traffic is no substitute.</p>")
+    if ks:
+        txt = (f"<p><b>Plain forgeries are blunt.</b> They change {both('plain', 'collateral')} of the other answers (Llama, Qwen), almost none leave every "
+               f"other answer intact ({both('plain', 'clean')}), and an audit driven by any single other question catches {both('plain', 'other')} of them. "
+               f"<b>Stealth forgeries are quieter but not clean.</b> They change {both('stealth', 'collateral')} of the other answers, and only "
+               f"{both('stealth', 'clean')} leave every other answer intact. A user who asks several questions would often see something wrong, "
+               f"though the node itself cannot tell without knowing the honest answers. "
+               f"Yet audits driven by other questions catch only {both('stealth', 'other')} of stealth forgeries (one question) and "
+               f"{both('stealth', 'union')} (all nine at once, 32 columns). Hiding from the target question's attention hides from the other questions' "
+               f"attention too, even when their answers move, which fits the laundering seen in §6.1: the effect travels through honest-looking columns. "
+               f"An audit driven by other traffic is therefore no substitute for auditing the question at hand.</p>")
     return "".join([
         "<h3>7.2 One cache, many questions</h3>",
         "<p>The attacker targets one question, but a node that keeps a cache usually answers several. For every successful forgery we ask the memo's "
@@ -665,7 +668,7 @@ LIMITS = """
 <h2>11. Limitations</h2>
 <ul>
 <li><b>Scale.</b> Two small models (0.5B and 1.2B parameters), memo-style factual QA with one-token-ish answers, and documents up to ~2K tokens (the attack backpropagates through the whole prefill, which did not fit in 8 GB at ~4K; the audit itself was timed up to 16K). Larger models have more layers and heads, so influence may concentrate differently.</li>
-<li><b>Known question.</b> The attacker optimises for a question it anticipates, and our audit reads the influence of the question actually asked. An attacker that has to work across many questions has a harder job, and an audit across many questions has more readers. We did not measure either.</li>
+<li><b>Known question.</b> The attacker optimises for a question it anticipates, and our audit reads the influence of the question actually asked. §7.2 shows that audits driven by other questions do not catch a stealth forgery. We did not test attackers that must succeed on several questions at once, or questions the attacker did not anticipate.</li>
 <li><b>Determinism.</b> The tolerance τ has to be calibrated for each pair of prefill and verification stacks (§7.1). We measured one pair, transformers SDPA against our own kernels, on one GPU. Heterogeneous hardware, quantised caches or different attention kernels would each need their own calibration, and τ may grow.</li>
 <li><b>Adaptive attacker.</b> Our adaptive forgers are white-box but simple: one hinge loss per score and 100–150 Adam steps. Stronger optimisers will hide better. §6 should be read as a lower bound on what an adaptive attacker can do.</li>
 <li><b>Not a MAC.</b> The check proves that a cache is consistent with its tokens and weights. It says nothing about whether the tokens themselves are the right ones. That is the ordinary job of authenticating the prompt.</li>

@@ -79,6 +79,9 @@ kv-notary shows that this trust is easy to abuse and cheap to verify.
   transformers' (23/23 per model). Thresholds must be calibrated on the stack that produces the cache
   (on Qwen, native thresholds flag every honest transformers cache). After that, there are zero false
   alarms and forged columns still score 14× or more above threshold.
+- **Audit the question you are answering.** Plain forgeries break other answers in the same memo (44–63%
+  of them) and are caught by audits driven by any other question. Stealth forgeries change fewer other
+  answers, but audits driven by other questions catch only 5–22% of them.
 - **Cost:** at 16K tokens, the influence pass plus 16 audited columns take 6% of the prefill time on an RTX
   5060 Laptop GPU.
 
