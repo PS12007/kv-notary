@@ -11,13 +11,14 @@ import torch
 
 from common import ROOT, save
 from kvnotary.model import Model
-from kvnotary.verify import column_errors, influence
+from kvnotary.verify import column_errors, influence, trace_plan
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--model", default="llama-1b")
 ap.add_argument("--max_t", type=int, default=16384)
 args = ap.parse_args()
 m = Model(args.model)
+m.expand_kv_above = 0  # same (memory-efficient) attention kernel at every length; outputs are identical
 text = open(os.path.join(ROOT, "data", "moby_dick.txt"), encoding="utf8").read()
 allids = m.tok(text, add_special_tokens=False)["input_ids"]
 readers = m.tok("\n\nQuestion: who is the captain of the ship, and what is he hunting?", add_special_tokens=False)["input_ids"]
@@ -47,6 +48,8 @@ while T <= args.max_t:
     for k in (8, 16, 64):
         P = sorted(rng.choice(T, size=k, replace=False).tolist())
         r[f"cols{k}"] = timeit(lambda: column_errors(m, ids, c, P))
+    infl = influence(m, c, readers, T)
+    r["trace32"] = timeit(lambda: trace_plan(m, ids, c, [infl], 32))  # picks 32 columns, audits 28 of them
     if T <= 4096:
         r["full_check"] = timeit(lambda: column_errors(m, ids, c, range(T)), reps=2)
     rows.append(r)
