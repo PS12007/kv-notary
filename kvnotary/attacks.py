@@ -239,14 +239,14 @@ def stealth_forge(m: Model, pre, suf, tgt, layer: int, positions, hide_k: int = 
                 x[:n_sinks] = np.inf
                 Snp.append(x)
             cols = merge_plan(Snp, trace_budget // 2, n_sinks)
-            allrows = _trace_rows(m, c, pa, torch.arange(T, device=m.device), T, n_sinks)  # [T, T]
             w = {q: 1.0 for q in cols[n_sinks:]}
             todo, hop = list(cols[n_sinks:]), torch.zeros(T, device=m.device)
             step = max(2, trace_budget // 8)
             while len(cols) < trace_budget:
                 if todo:
                     wq = torch.as_tensor([w[q] for q in todo], device=m.device)[:, None]
-                    hop = torch.maximum(hop, (wq * allrows[todo]).amax(0))
+                    rows = _trace_rows(m, c, pa, torch.as_tensor(todo, device=m.device), T, n_sinks)  # only the rows visited
+                    hop = torch.maximum(hop, (wq * rows).amax(0))
                 cand = hop.detach().clone()
                 cand[cols] = -1
                 nxt = [int(j) for j in torch.argsort(-cand)[: trace_budget - len(cols)][:step] if cand[j] > 0]
