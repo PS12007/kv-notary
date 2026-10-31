@@ -537,6 +537,53 @@ def sec_crossstack():
         "the threshold. Cross-stack verification works, but calibration is part of the deployment, not a constant.</p>"])
 
 
+def sec_multiq():
+    X = {k: load(f"multiq_{k}") for k, _ in MODELS}
+    if not any(X.values()):
+        return ""
+    rows, st = [], {}
+    for k, name in MODELS:
+        d = X[k]
+        if not d:
+            continue
+        for att in ("plain", "stealth"):
+            R = [r for r in d["records"] if r["attacker"] == att]
+            ok = [r for r in R if r["success"]]
+            if not ok:
+                continue
+            q = [x for r in ok for x in r["others"]]
+            st[(k, att)] = x = {
+                "n": len(R), "succ": len(ok),
+                "collateral": mean(o["changed"] for o in q),
+                "clean": mean(not any(o["changed"] for o in r["others"]) for r in ok),
+                "own": mean(r["own_caught32"] for r in ok),
+                "other": mean(o["caught32"] for o in q),
+                "union": mean(r["union_caught32"] for r in ok),
+                "all": mean(r["union_all_caught32"] for r in ok)}
+            rows.append([name, "plain forger" if att == "plain" else "stealth forger (hides from target question)", f"{len(ok)}/{len(R)}",
+                         pct(x["collateral"]), pct(x["clean"]), pct(x["own"]), pct(x["other"]), pct(x["union"]), pct(x["all"])])
+    k0 = next(k for k, _ in MODELS if (k, "stealth") in st)
+    pl, sl = st.get((k0, "plain")), st.get((k0, "stealth"))
+    txt = ""
+    if pl and sl:
+        txt = (f"<p>On {dict(MODELS)[k0]}, a plain single-column forgery changes {pct(pl['collateral'])} of the other answers in the memo, "
+               f"and only {pct(pl['clean'])} of plain forgeries leave every other answer intact. A user asking several questions would often notice. "
+               f"The stealth forger, which only tries to hide from the target question's audit, is far more surgical: it changes {pct(sl['collateral'])} "
+               f"of other answers, and {pct(sl['clean'])} of its forgeries change nothing else. Hiding from the target question also hides from the others: "
+               f"a 32-column audit driven by a single other question catches {pct(sl['other'])} of stealth forgeries, and one driven by all nine other questions "
+               f"together catches {pct(sl['union'])}. Other questions do not read the forged column, which is what makes the attack targeted. "
+               f"An audit is only as good as the question that drives it. Questions the attacker anticipated are the ones that matter, and an audit driven by "
+               f"other traffic is no substitute.</p>")
+    return "".join([
+        "<h3>7.2 One cache, many questions</h3>",
+        "<p>The attacker targets one question, but a node that keeps a cache usually answers several. For every successful forgery we ask the memo's "
+        "nine other questions and record whether their answers change (collateral damage), and whether a 32-column audit driven by each other question, "
+        "or by all nine at once, would contain the forged column. All audits merge the four public scores.</p>",
+        table(["model", "attacker", "success", "other answers changed", "forgeries with no collateral", "caught: target question",
+               "caught: one other question", "caught: all 9 other questions", "caught: all 10 questions"], rows, "small"),
+        "<p class='cap'>Table 9. Collateral damage and audits driven by other questions (32 columns, public scores merged).</p>", txt])
+
+
 def sec_corrupt():
     if not COR:
         return ""
@@ -551,7 +598,7 @@ def sec_corrupt():
              "That holds at every layer except the last, which no later layer reads. "
              "So these edits are loud, and even a single random column usually catches them.</p>")
     t.append(table(["model", "edited layer", "success", "failing columns (median)", "of later columns", "random 1", "random 4"], rows, "small"))
-    t.append("<p class='cap'>Table 9. In-place edits of one column (24 per row: 12 tasks × 2 positions).</p>")
+    t.append("<p class='cap'>Table 10. In-place edits of one column (24 per row: 12 tasks × 2 positions).</p>")
     brow = []
     for k, c in COR.items():
         for b in (15, 14, 13, 7, 0):
@@ -566,7 +613,7 @@ def sec_corrupt():
              f"The full column check flags {pct(lc['flag_any'])} of all flips, including harmless ones. "
              f"Hardware faults are therefore the cheap case: a range check plus a small random audit covers them.</p>")
     t.append(table(["model", "bit", "flips", "output changed", "answer wrong", "check flags it", "range check fires"], brow, "small"))
-    t.append("<p class='cap'>Table 10. Random single-bit flips by bit position (selected bits).</p>")
+    t.append("<p class='cap'>Table 11. Random single-bit flips by bit position (selected bits).</p>")
     t.append(fig("corrupt", "Figure 8. Left: columns that fail after an in-place edit, by edited layer. Right: effect of a single bit flip by bit position."))
     return "".join(t)
 
@@ -603,7 +650,7 @@ def sec_cost():
         + "</p>",
         table(["T", "KV (MiB)", "prefill (ms)", "influence (ms)", "8 cols (ms)", "16 cols (ms)", "64 cols (ms)", "16 cols, CUDA graph (ms)", "trace 32 (ms)", "full check (ms)",
                "influence + 16 / prefill"], rows, "small"),
-        "<p class='cap'>Table 11. Median wall-clock time of 5 runs.</p>",
+        "<p class='cap'>Table 12. Median wall-clock time of 5 runs.</p>",
         fig("cost", "Figure 9. Time for prefill, a full check, and audits of 16 and 64 columns, by document length.")])
 
 
@@ -691,6 +738,7 @@ html = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name
 {sec_defense()}
 {sec_innoise()}
 {sec_crossstack()}
+{sec_multiq()}
 {sec_corrupt()}
 {sec_cost()}
 {RELATED}
