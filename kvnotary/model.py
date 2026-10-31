@@ -87,6 +87,7 @@ class Model:
         self.D = cfg.get("head_dim") or self.d // self.H
         self.eps = cfg["rms_norm_eps"]
         self.device, self.dtype = device, dtype
+        self.n_sinks = 4  # attention-sink columns, excluded from trace normalisation
         self.expand_kv_above = 1024  # tokens; above this, SDPA gets expanded KV heads (see run)
         w = {}
         for f in sorted(glob.glob(os.path.join(path, "*.safetensors"))):
@@ -243,6 +244,7 @@ class Model:
         g = self.H // self.Hkv
         mask = torch.arange(T, device=self.device)[None, :] < P[:, None]  # [n, T]
         Ks, Vs, A = [], [], torch.zeros(n, T, device=self.device)
+        trace = want_attn == "trace"
         for i, lay in enumerate(self.layers):
             q, k, v = self._qkv(lay, x, P)
             Ks.append(k)
@@ -255,12 +257,19 @@ class Model:
             p = torch.cat([s_ctx, s_self], -1).softmax(-1)
             o = torch.einsum("nkgt,ktd->nkgd", p[..., :T], cache.V[i].float())
             o = o + p[..., T:] * v.float()[:, :, None, :]
-            if want_attn:
+            if trace:  # value-weighted share of each earlier column, per head; max over heads/layers
+                c = p[..., :T] * cache.V[i].float().norm(dim=-1)[None, :, None, :]
+                c = c / c[..., self.n_sinks:].sum(-1, keepdim=True).clamp_min(1e-12)
+                A = torch.maximum(A, c.amax((1, 2)))
+            elif want_attn:
                 A += p[..., :T].mean((1, 2))
             o = o.to(x.dtype).reshape(n, -1)
             x = x + o @ lay["o"].T
             x = x + self._mlp(lay, x)
         out = (torch.stack(Ks).transpose(1, 2), torch.stack(Vs).transpose(1, 2))
+        if trace:
+            A[:, : self.n_sinks] = 0
+            return (*out, A)
         return (*out, A / self.L) if want_attn else out
 
     # ---------------------------------------------------------------- generation
