@@ -20,7 +20,7 @@ import numpy as np
 import torch
 
 from .model import Cache, Model
-from .verify import Verifier, column_errors, influence, plan
+from .verify import SCORES, Verifier, column_errors, merge_plan, reader_attention, scores_from
 
 
 @dataclass
@@ -38,10 +38,15 @@ class Verdict:
 
 
 class Notary:
-    def __init__(self, m: Model, thresholds=None, k_top: int = 12, k_rand: int = 16, seed: int = 0):
+    def __init__(self, m: Model, thresholds=None, k_top: int = 12, k_rand: int = 16, seed: int = 0,
+                 scores=SCORES):
+        """k_top columns (counting the 4 sinks) are chosen by merging the rankings of `scores`
+        round-robin; k_rand more are uniform. Merging every public score is the default because
+        an attacker then has to hide from all of them at once (see the paper, section 6.1)."""
         self.m = m
         self.v = Verifier(m, thresholds)
         self.k_top, self.k_rand = k_top, k_rand
+        self.scores = (scores,) if isinstance(scores, str) else tuple(scores)
         self.rng = np.random.default_rng(seed)
 
     def calibrate(self, docs, margin=1.5):
@@ -54,8 +59,11 @@ class Notary:
         t0 = time.perf_counter()
         T = len(ids)
         readers = list(question_ids) + list(answer_ids)[:-1] if len(answer_ids) else list(question_ids)
-        infl = influence(self.m, cache, readers, T)
-        cols = sorted(int(c) for c in plan(infl, self.k_top, self.k_rand, self.rng))
+        a, vn = reader_attention(self.m, cache, readers, T)
+        top = merge_plan([scores_from(a, vn, md) for md in self.scores], self.k_top)
+        rest = np.setdiff1d(np.arange(T), top)
+        rnd = self.rng.choice(rest, size=min(self.k_rand, len(rest)), replace=False) if self.k_rand else []
+        cols = sorted(set(int(c) for c in top) | set(int(c) for c in rnd))
         E = column_errors(self.m, ids, cache, cols)
         sc = (E / self.v.tau[:, None]).max(0).values.cpu().numpy()
         if torch.cuda.is_available():
