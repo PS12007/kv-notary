@@ -310,7 +310,7 @@ def fig_defense(B="32"):
         ax.grid(False)
         for sp in ax.spines.values():
             sp.set_visible(False)
-    fig.suptitle("Round two: audits against forgers that know the public scores (32 columns audited)", y=1.0)
+    fig.suptitle("Audits against forgers that know how columns are picked (32 columns audited)", y=1.0)
     fig.tight_layout()
     save(fig, "defense")
 
