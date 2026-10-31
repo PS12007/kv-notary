@@ -182,3 +182,14 @@ def test_graphed_audit_matches_eager(tmp_path_factory):
     assert torch.equal(g(IDS, c, P), column_errors(m, IDS, c, P))
     fc = forge_cache(m, IDS, 1, [40], torch.randn(1, m.d, device="cuda") * 5)
     assert g(IDS, fc, P)[:, 1].max() > 1e-2
+
+
+def test_hf_cache_roundtrip(pair):
+    from kvnotary.hf import from_hf, hf_prefill, to_hf
+    hf, m = pair
+    hf.eval()
+    c = hf_prefill(hf, IDS)
+    _, mine = m.prefill(IDS)
+    assert (c.K - mine.K).abs().max() < 1e-4 and (c.V - mine.V).abs().max() < 1e-4
+    back = from_hf(to_hf(c))
+    assert torch.equal(back.K, c.K) and torch.equal(back.V, c.V)
