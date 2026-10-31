@@ -116,8 +116,8 @@ docs/                 GitHub Pages demo, figures, paper
 
 ## Limitations
 
-Two small models, factual memo QA, documents up to ~2K tokens (a ~4K run did not fit next to other GPU
-work on an 8 GB laptop card). The attacker knows the question in advance. The tolerance is calibrated on our
+Two small models, factual memo QA, documents up to ~2K tokens (the forger backpropagates through the whole
+prefill, which at ~4K tokens no longer fits in an 8 GB laptop GPU; auditing itself scales to 16K). The attacker knows the question in advance. The tolerance is calibrated on our
 own kernels; heterogeneous prefill and decode hardware would need a looser one. The check proves a cache
 matches its tokens and weights, not that the tokens are the right ones.
 
