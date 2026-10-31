@@ -120,8 +120,9 @@ footer { color: var(--muted); font-size: 13px; padding: 40px 0 60px; border-top:
       <span><i class="sw" style="background:var(--red)"></i>audited, does not match</span>
       <span><label><input type="checkbox" id="truth"> show every bad column (full check)</label></span>
     </div>
+    <div class="row seg" id="plans" style="margin-top:14px"><span class="label">pick by</span></div>
     <div class="controls">
-      <div><label>most-read columns to check <output id="ktv"></output></label><input type="range" id="kt" min="0" max="64" value="8"></div>
+      <div><label>columns picked by the rule above <output id="ktv"></output></label><input type="range" id="kt" min="0" max="64" value="8"></div>
       <div><label>random columns to check <output id="krv"></output></label><input type="range" id="kr" min="0" max="64" value="8"></div>
       <button class="go" id="go">Run audit</button>
     </div>
@@ -223,8 +224,16 @@ print(verdict)  # REJECT (columns [212] disagree with their tokens); checked 28 
   function audit() {
     const d = data[model], s = S();
     const kt = +$("kt").value, kr = +$("kr").value;
-    const top = s.rank_layermax.slice(0, 4 + kt);
-    const rest = s.rank_layermax.slice(4 + kt);
+    let top;
+    if (planName === "trace" && s.trace_plans && kt >= 4) {
+      const Bs = Object.keys(s.trace_plans).map(Number).filter(b => b <= 4 + kt);
+      top = s.trace_plans[String(Math.max(...Bs))].slice();
+      for (const c of (s.order_merged || [])) { if (top.length >= 4 + kt) break; if (!top.includes(c)) top.push(c); }
+    } else {
+      top = ((planName !== "layermax" && s.order_merged) || s.rank_layermax).slice(0, 4 + kt);
+    }
+    const inTop = new Set(top);
+    const rest = [...Array(d.tokens.length).keys()].filter(c => !inTop.has(c));
     for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
     const cols = top.concat(rest.slice(0, kr));
     document.querySelectorAll(".memo span").forEach(x => x.classList.remove("chk", "fail"));
@@ -259,6 +268,10 @@ print(verdict)  # REJECT (columns [212] disagree with their tokens); checked 28 
     if (data[model]) return render();
     fetch(`data/demo_${model}.json`).then(r => r.json()).then(d => { data[model] = d; render(); });
   }
+  const PLANS = [["layermax", "most-read"], ["merged", "all scores merged"], ["trace", "trace what they read"]];
+  let planName = "layermax";
+  const drawPlans = () => seg($("plans"), PLANS, planName, k => { planName = k; drawPlans(); });
+  drawPlans();
   $("go").onclick = audit;
   $("truth").onchange = render;
   const upd = () => { $("ktv").textContent = $("kt").value; $("krv").textContent = $("kr").value; };
