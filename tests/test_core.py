@@ -141,3 +141,18 @@ def test_score_family():
     s1, s2 = np.arange(T, dtype=float), np.arange(T, dtype=float)[::-1].copy()
     cols = merge_plan([s1, s2], 10)
     assert cols[:4] == [0, 1, 2, 3] and len(set(cols)) == 10 and T - 1 in cols and 4 in cols
+
+
+def test_trace_rows(pair):
+    from kvnotary.verify import trace_plan
+    _, m = pair
+    _, c = m.prefill(IDS)
+    P = [10, 40, 90]
+    _, _, tr = m.columns(IDS, c, P, want_attn="trace")
+    assert tr.shape == (3, len(IDS))
+    assert (tr[:, :4] == 0).all()
+    for i, p in enumerate(P):
+        assert (tr[i, p:] == 0).all() and tr[i, 4:p].max() <= 1 + 1e-6
+    s = np.random.default_rng(0).random(len(IDS))
+    cols = trace_plan(m, IDS, c, [s], 20)
+    assert len(cols) == len(set(cols)) <= 20 and cols[:4] == [0, 1, 2, 3]
