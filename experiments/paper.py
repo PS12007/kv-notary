@@ -505,6 +505,38 @@ def sec_innoise():
     return "".join(t)
 
 
+def sec_crossstack():
+    X = {k: load(f"crossstack_{k}") for k, _ in MODELS}
+    if not any(X.values()):
+        return ""
+    rows, notes = [], []
+    for k, name in MODELS:
+        d = X[k]
+        if not d:
+            continue
+        R = d["records"]
+        ok = [r for r in R if r["forge_ok_ours"]]
+        ratio = np.array(d["tau_hf"]) / np.array(d["tau_native"])
+        rows.append([name, len(R), f"{sum(r['honest_flagged_native'] > 0 for r in R)}/{len(R)}", f"{max(r['honest_max_native'] for r in R):.2f}",
+                     f"{sum(r['honest_flagged_hf'] > 0 for r in R)}/{len(R)}", f"{max(r['honest_max_hf'] for r in R):.2f}",
+                     f"{np.median(ratio):.2f} ({ratio.max():.3g})", f"{sum(r['forge_ok_hf'] for r in ok)}/{len(ok)}",
+                     f"{min(r['forged_score_hf'] for r in ok):.1f}"])
+    return "".join([
+        "<h3>7.1 Across software stacks</h3>",
+        "<p>A verifier will rarely run the same kernels as the prefill worker. We prefill with Hugging Face <code>transformers</code> (bf16, SDPA) and verify with "
+        "kv-notary's own column recomputation (<code>kvnotary.hf</code> converts the cache). We score honest transformers caches with the thresholds calibrated on "
+        "kv-notary's own caches, then with thresholds calibrated on transformers caches of the same 20 calibration documents. Then we forge one column with "
+        "kv-notary's forward, as in §4, and decode it with transformers.</p>",
+        table(["model", "memos", "false alarms, native τ", "worst honest score", "false alarms, τ from transformers", "worst honest score",
+               "τ ratio, median (max)", "forgeries that fool transformers", "weakest forged score"], rows, "small"),
+        "<p class='cap'>Table 8. Prefill with transformers, verify with kv-notary. Scores are relative to the threshold (1 = at tolerance).</p>",
+        "<p>Three results. Forgeries transfer: every forged cache that fooled kv-notary's decoder also fooled transformers', so the attack does not depend on "
+        "the implementation that consumes it. The tolerance must be calibrated against the stack that produces the cache: kv-notary's first layer recomputes "
+        "Qwen bit-exactly, so its native threshold there is the 10<sup>−6</sup> floor, and every honest transformers cache fails it. Calibrated on transformers caches, "
+        "the thresholds are mostly within a few tens of percent of the native ones, honest caches pass, and forged columns still score an order of magnitude above "
+        "the threshold. Cross-stack verification works, but calibration is part of the deployment, not a constant.</p>"])
+
+
 def sec_corrupt():
     if not COR:
         return ""
@@ -519,7 +551,7 @@ def sec_corrupt():
              "That holds at every layer except the last, which no later layer reads. "
              "So these edits are loud, and even a single random column usually catches them.</p>")
     t.append(table(["model", "edited layer", "success", "failing columns (median)", "of later columns", "random 1", "random 4"], rows, "small"))
-    t.append("<p class='cap'>Table 8. In-place edits of one column (24 per row: 12 tasks × 2 positions).</p>")
+    t.append("<p class='cap'>Table 9. In-place edits of one column (24 per row: 12 tasks × 2 positions).</p>")
     brow = []
     for k, c in COR.items():
         for b in (15, 14, 13, 7, 0):
@@ -534,7 +566,7 @@ def sec_corrupt():
              f"The full column check flags {pct(lc['flag_any'])} of all flips, including harmless ones. "
              f"Hardware faults are therefore the cheap case: a range check plus a small random audit covers them.</p>")
     t.append(table(["model", "bit", "flips", "output changed", "answer wrong", "check flags it", "range check fires"], brow, "small"))
-    t.append("<p class='cap'>Table 9. Random single-bit flips by bit position (selected bits).</p>")
+    t.append("<p class='cap'>Table 10. Random single-bit flips by bit position (selected bits).</p>")
     t.append(fig("corrupt", "Figure 8. Left: columns that fail after an in-place edit, by edited layer. Right: effect of a single bit flip by bit position."))
     return "".join(t)
 
@@ -571,7 +603,7 @@ def sec_cost():
         + "</p>",
         table(["T", "KV (MiB)", "prefill (ms)", "influence (ms)", "8 cols (ms)", "16 cols (ms)", "64 cols (ms)", "16 cols, CUDA graph (ms)", "trace 32 (ms)", "full check (ms)",
                "influence + 16 / prefill"], rows, "small"),
-        "<p class='cap'>Table 10. Median wall-clock time of 5 runs.</p>",
+        "<p class='cap'>Table 11. Median wall-clock time of 5 runs.</p>",
         fig("cost", "Figure 9. Time for prefill, a full check, and audits of 16 and 64 columns, by document length.")])
 
 
@@ -658,6 +690,7 @@ html = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name
 {sec_adaptive()}
 {sec_defense()}
 {sec_innoise()}
+{sec_crossstack()}
 {sec_corrupt()}
 {sec_cost()}
 {RELATED}

@@ -74,6 +74,11 @@ kv-notary shows that this trust is easy to abuse and cheap to verify.
 
   <p align="center"><img src="docs/figures/game.png" width="700"></p>
 
+- **Works on caches from other stacks.** `kvnotary.hf` audits caches produced by Hugging Face
+  `transformers`. Forgeries transfer: every forged cache that fooled kv-notary's decoder also fooled
+  transformers' (23/23 per model). Thresholds must be calibrated on the stack that produces the cache
+  (on Qwen, native thresholds flag every honest transformers cache). After that, there are zero false
+  alarms and forged columns still score 14× or more above threshold.
 - **Cost:** at 16K tokens, the influence pass plus 16 audited columns take 6% of the prefill time on an RTX
   5060 Laptop GPU.
 
@@ -86,6 +91,14 @@ m = Model("llama-1b")                      # own Llama/Qwen2 forward; logits mat
 notary = Notary(m, thresholds)             # per-layer bf16 tolerance (see experiments/common.py)
 verdict = notary.audit(doc_ids, received_cache, question_ids, answer_ids)
 print(verdict)   # REJECT (columns [212] disagree with their tokens); checked 28 columns in 41 ms
+
+# caches from Hugging Face transformers
+from kvnotary.hf import hf_prefill
+cache = hf_prefill(hf_model, doc_ids)      # or kvnotary.hf.from_hf(outputs.past_key_values)
+
+# fast path: one CUDA-graph launch per audit, bit-identical (3x faster at 512 tokens)
+from kvnotary.fast import GraphedAudit
+errors = GraphedAudit(m, T=len(doc_ids), n=16)(doc_ids, cache, columns)
 ```
 
 `python examples/demo.py` runs the whole story end to end: an honest cache, a forged one that changes the
