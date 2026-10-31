@@ -350,12 +350,27 @@ def def_stats(d, B="32"):
     return out
 
 
+def _launder():
+    out = []
+    for k, name in MODELS:
+        d = A.get(k)
+        if not d:
+            continue
+        R = [r for r in d["records"] if r["success"] and r["lam"] > 0 and r["m"] == 1]
+        if R:
+            out.append(f"{pct(1 - mean(r['direct'] for r in R))} ({name})")
+    return " and ".join(out) or "some"
+
+
+LAUNDER = _launder()
+
+
 def sec_defense():
     if not any(DEF.values()):
         return ""
     t = ["<h3>6.1 Round two: audits the attacker cannot see</h3>",
-         "<p>Two things stand out in Table 4. Different scores disagree about where a hidden column lands, and in 25–60% of successful hidden "
-         "forgeries, putting the honest column back does <i>not</i> restore the answer. The forgery has been <i>laundered</i>: later columns read the "
+         "<p>Two things stand out in Table 4. Different scores disagree about where a hidden column lands, and in " + LAUNDER + " of successful hidden "
+         "single-column forgeries, putting the honest column back does <i>not</i> restore the answer. The forgery has been <i>laundered</i>: later columns read the "
          "forged one during prefill, carry its effect forward, and the question reads them instead. Those later columns are consistent with their "
          "inputs, so they pass the check. This suggests two defenses. The first is scores the attacker cannot optimise against: finer ones (per head, "
          "per reader token) and a <b>secret</b> one, a random quarter of the heads with random weights, drawn by the verifier for each audit. "
@@ -569,7 +584,7 @@ RELATED = """
 LIMITS = """
 <h2>11. Limitations</h2>
 <ul>
-<li><b>Scale.</b> Two small models (0.5B and 1.1B parameters), memo-style factual QA with one-token-ish answers, and documents up to ~6K tokens. Larger models have more layers and heads, so influence may concentrate differently.</li>
+<li><b>Scale.</b> Two small models (0.5B and 1.1B parameters), memo-style factual QA with one-token-ish answers, and documents up to ~2K tokens (the attack backpropagates through the whole prefill, which did not fit in 8 GB at ~4K; the audit itself was timed up to 16K). Larger models have more layers and heads, so influence may concentrate differently.</li>
 <li><b>Known question.</b> The attacker optimises for a question it anticipates, and our audit reads the influence of the question actually asked. An attacker that has to work across many questions has a harder job, and an audit across many questions has more readers. We did not measure either.</li>
 <li><b>Determinism.</b> The tolerance τ is calibrated on our own kernels. A real deployment with heterogeneous prefill and decode hardware would need calibration across kernel pairs, and τ would grow.</li>
 <li><b>Adaptive attacker.</b> Our adaptive forger is white-box but simple: one hinge loss and 100 Adam steps. Stronger optimisers will hide better. §6 should be read as a lower bound on what an adaptive attacker can do.</li>
