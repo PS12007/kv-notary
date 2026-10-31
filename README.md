@@ -58,8 +58,7 @@ kv-notary shows that this trust is easy to abuse and cheap to verify.
   *trace* the audit: after checking the most-read columns, follow what those columns themselves read, using
   attention rows the recomputation produces anyway. We pitted 10 audit plans against 8 attackers, including
   attackers that hide from all four public scores at once and one that replays the verifier's exact tracing
-  procedure. Against the
-  attacker's best reply at a 32-column budget:
+  procedure. Against the attacker's best reply at a 32-column budget:
 
   | audit plan | Llama-3.2-1B | Qwen2.5-0.5B |
   |---|---|---|
@@ -116,7 +115,7 @@ answer, and the audit that rejects it.
 pip install -r requirements.txt
 # models: unsloth/Llama-3.2-1B-Instruct and Qwen/Qwen2.5-0.5B-Instruct (HF snapshots, ~3.3 GB) in models/
 python -m pytest tests                     # CPU, tiny random models, no downloads
-bash run_all.sh                            # every experiment, one GPU job at a time (~8 h on 8 GB)
+bash run_all.sh                            # every experiment, one GPU job at a time (~12 h on 8 GB)
 python experiments/figures.py && python experiments/paper.py
 ```
 
@@ -129,7 +128,10 @@ kvnotary/model.py     Llama / Qwen2 forward with residual and KV hooks, explicit
 kvnotary/verify.py    column recomputation, tolerance calibration, influence scores, audit plans
 kvnotary/attacks.py   consistent forgery, in-place edit, bit flip, adaptive stealth forgery
 kvnotary/notary.py    one-call audit API
-experiments/          forge, corrupt, adaptive, innoise, cost, demo export, figures, paper
+kvnotary/hf.py        convert Hugging Face transformers caches
+kvnotary/fast.py      CUDA-graph audit (one launch per audit)
+experiments/          forge, corrupt, adaptive, defense (rounds two and three), innoise, crossstack,
+                      multiq, cost, demo export, figures, paper
 tests/                exactness tests on tiny random models (run in CI)
 docs/                 GitHub Pages demo, figures, paper
 ```
@@ -137,8 +139,9 @@ docs/                 GitHub Pages demo, figures, paper
 ## Limitations
 
 Two small models, factual memo QA, documents up to ~2K tokens (the forger backpropagates through the whole
-prefill, which at ~4K tokens no longer fits in an 8 GB laptop GPU; auditing itself scales to 16K). The attacker knows the question in advance. The tolerance is calibrated on our
-own kernels; heterogeneous prefill and decode hardware would need a looser one. The check proves a cache
-matches its tokens and weights, not that the tokens are the right ones.
+prefill, which at ~4K tokens no longer fits in an 8 GB laptop GPU; auditing itself scales to 16K). The attacker knows the question in advance. The tolerance must be calibrated for each pair of prefill and
+verification stacks; we measured one pair (transformers vs kv-notary) on one GPU. Our adaptive attackers are
+modest white-box optimisers, so their win rates are not bounds. The check proves a cache matches its tokens
+and weights, not that the tokens are the right ones.
 
 MIT licence.
