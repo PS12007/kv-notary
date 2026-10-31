@@ -367,8 +367,8 @@ def sec_defense():
         t += [f"<h3>{name}</h3>", table(["attacker", "success"] + [lab for _, lab in DEF_PLANS], rows, "small")]
     t.append("<p class='cap'>Table 5. Probability that a 32-column audit catches a successful forgery, by attacker (rows) and audit plan (columns). "
              "Secret: mean over 32 secret draws. Random parts are exact hypergeometric probabilities.</p>")
-    t.append(defense_text())
     t.append(fig("defense", "Figure 5. Round two of the arms race. Each cell: share of successful forgeries a 32-column audit catches."))
+    t.append(defense_text())
     return "".join(t)
 
 
