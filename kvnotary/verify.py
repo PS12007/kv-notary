@@ -124,6 +124,80 @@ def question_attention(m: Model, cache: Cache, suf, T):
     return a[:, :T].mean(0).cpu().numpy()
 
 
+SCORES = ("mean", "layermax", "headmax", "tokmax")
+
+
+def vw_score(a, vn, mode="mean", n_sinks=4, secret=None):
+    """Attention-based column scores, differentiable (shared by the verifier and the attacker).
+
+    a: [L, H, n, T] attention of the n reader tokens to the T document columns; vn: [L, H, T]
+    value norms. c = a * vn bounds what column j can add to reader r through head h at layer l.
+      mean     - max over heads, sum over readers, mean over layers (the default audit score)
+      layermax - the same per layer, normalised per layer, max over layers
+      headmax  - sum over readers per (layer, head), normalised per head, max over heads
+      tokmax   - normalised per (layer, head, reader), max over all of them (finest)
+      secret   - headmax restricted to a secret random subset of heads with secret weights;
+                 secret = (mask [L, H] bool, weights [L, H])
+    Normalising divides by the total over non-sink columns, so every unit has equal say.
+    """
+    c = a * vn[:, :, None, :]
+
+    def norm(x):
+        return x / x[..., n_sinks:].sum(-1, keepdim=True).clamp_min(1e-12)
+
+    if mode == "mean":
+        return c.amax(1).sum(1).mean(0)
+    if mode == "layermax":
+        return norm(c.amax(1).sum(1)).amax(0)
+    if mode == "headmax":
+        return norm(c.sum(2)).flatten(0, 1).amax(0)
+    if mode == "tokmax":
+        return norm(c).flatten(0, 2).amax(0)
+    if mode == "secret":
+        mask, w = secret
+        return (norm(c.sum(2)) * w[..., None])[mask].amax(0)
+    raise ValueError(mode)
+
+
+def secret_key(m: Model, rng, keep=0.25):
+    """A verifier-side secret for mode="secret": which heads count, and how much."""
+    mask = torch.as_tensor(rng.random((m.L, m.H)) < keep, device=m.device)
+    if not mask.any():
+        mask[rng.integers(m.L), rng.integers(m.H)] = True
+    w = torch.as_tensor(np.exp(rng.normal(0, 1, (m.L, m.H))), dtype=torch.float32, device=m.device)
+    return mask, w
+
+
+@torch.no_grad()
+def reader_attention(m: Model, cache: Cache, readers, T):
+    """Attention of the readers to the document ([L, H, n, T]) and value norms ([L, H, T])."""
+    _, _, a = m.run(list(readers), past=cache, want_attn="full")
+    vn = cache.V[:, :, :T].float().norm(dim=-1).repeat_interleave(m.H // m.Hkv, 1)
+    return a[..., :T].float(), vn
+
+
+def scores_from(a, vn, mode, n_sinks=4, secret=None):
+    s = vw_score(a, vn, mode, n_sinks, secret).double().cpu().numpy()
+    s[:n_sinks] = np.inf
+    return s
+
+
+def merge_plan(scores, budget, n_sinks=4):
+    """Columns to audit when several scores share a budget: sinks, then round-robin down
+    each ranking until `budget` distinct columns are chosen."""
+    orders = [np.argsort(-np.where(np.isfinite(s), s, -1)) for s in scores]
+    cols, i = list(range(n_sinks)), 0
+    seen = set(cols)
+    while len(cols) < budget and i < len(orders[0]):
+        for o in orders:
+            j = int(o[i])
+            if j not in seen and len(cols) < budget:
+                seen.add(j)
+                cols.append(j)
+        i += 1
+    return cols
+
+
 def influence(m: Model, cache: Cache, readers, T, n_sinks=4, mode="mean"):
     """How much the trusted readers (question + answer tokens) draw from each document column.
 
@@ -145,17 +219,8 @@ def influence(m: Model, cache: Cache, readers, T, n_sinks=4, mode="mean"):
             loss.backward()
         s = ((K.grad * K).norm(dim=(1, 3)) + (V.grad * V).norm(dim=(1, 3))).sum(0)[:T].detach().cpu().numpy()
     else:
-        with torch.no_grad():
-            _, _, a = m.run(list(readers), past=cache, want_attn="full")  # [L,H,n,Ttot]
-            a = a[..., :T].float()
-            g = m.H // m.Hkv
-            vn = cache.V[:, :, :T].float().norm(dim=-1).repeat_interleave(g, 1)  # [L,H,T]
-            per_layer = (a * vn[:, :, None, :]).amax(1).sum(1)
-            if mode == "mean":
-                s = per_layer.mean(0).cpu().numpy()
-            else:  # normalise each layer so layers with large values do not drown the rest
-                per_layer = per_layer / per_layer[:, n_sinks:].sum(-1, keepdim=True).clamp_min(1e-12)
-                s = per_layer.amax(0).cpu().numpy()
+        a, vn = reader_attention(m, cache, readers, T)
+        s = vw_score(a, vn, mode, n_sinks).cpu().numpy()
     s = s.astype(np.float64)
     s[:n_sinks] = np.inf
     return s
