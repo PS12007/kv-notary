@@ -261,6 +261,13 @@ def fig_cost():
     save(fig, "cost")
 
 # ------------------------------------------------------------------ fig: defenses vs adaptive forgers
+def load_defense(mk):
+    import glob
+    parts = [load(f"defense_{mk}.json")] + [json.load(open(f)) for f in sorted(glob.glob(os.path.join(RES, f"defense_{mk}_*.json")))]
+    parts = [x for x in parts if x]
+    return {**parts[0], "records": [r for x in parts for r in x["records"]]} if parts else None
+
+
 DEF_ATT = ["none", "mean", "layermax", "headmax", "tokmax", "all public", "all public + trace"]
 DEF_PLANS = [("mean", "mean"), ("layermax", "layermax"), ("headmax", "headmax"), ("tokmax", "tokmax"),
              ("grad", "gradient"), ("all public", "all public|merged"), ("secret", "secret|heads"),
@@ -268,7 +275,7 @@ DEF_PLANS = [("mean", "mean"), ("layermax", "layermax"), ("headmax", "headmax"),
 
 
 def fig_defense(B="32"):
-    ds = [(mk, lab, load(f"defense_{mk}.json")) for mk, lab in MODELS]
+    ds = [(mk, lab, load_defense(mk)) for mk, lab in MODELS]
     ds = [x for x in ds if x[2]]
     if not ds:
         return
@@ -308,7 +315,7 @@ def fig_defense(B="32"):
 
 
 def fig_game(B="32"):
-    ds = [(mk, lab, load(f"defense_{mk}.json")) for mk, lab in MODELS]
+    ds = [(mk, lab, load_defense(mk)) for mk, lab in MODELS]
     ds = [x for x in ds if x[2]]
     if not ds:
         return

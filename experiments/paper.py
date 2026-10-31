@@ -325,7 +325,17 @@ DEF_ATT = ["none", "mean", "layermax", "headmax", "tokmax", "all public", "all p
 DEF_PLANS = [("mean", "mean"), ("layermax", "layermax"), ("headmax", "headmax"), ("tokmax", "tokmax"), ("grad", "gradient"),
              ("all public", "all public merged"), ("secret", "secret heads"), ("trace", "trace"),
              ("trace + random", "trace + random"), ("random", "random")]
-DEF = {k: load(f"defense_{k}") for k, _ in MODELS}
+def load_defense(k):
+    """defense_<model>.json plus any defense_<model>_<tag>.json with more seeds."""
+    import glob
+    parts = [load(f"defense_{k}")] + [json.load(open(f)) for f in sorted(glob.glob(os.path.join(RES, f"defense_{k}_*.json")))]
+    parts = [x for x in parts if x]
+    if not parts:
+        return None
+    return {**parts[0], "records": [r for x in parts for r in x["records"]]}
+
+
+DEF = {k: load_defense(k) for k, _ in MODELS}
 
 
 def def_stats(d, B="32"):

@@ -37,6 +37,8 @@ ap.add_argument("--n", type=int, default=12)
 ap.add_argument("--steps", type=int, default=150)
 ap.add_argument("--hide", type=int, default=28)
 ap.add_argument("--secrets", type=int, default=32)
+ap.add_argument("--start", type=int, default=600, help="first task seed")
+ap.add_argument("--tag", default="", help="suffix for the result file (more seeds, merged when read)")
 args = ap.parse_args()
 
 m = Model(args.model)
@@ -73,7 +75,7 @@ def mix(flagged, cols, B, T):
     return p_random(int(flagged.sum()), T - len(cols), B - len(cols))
 
 
-for seed, task, e, c, out, tgt in honest_tasks(m, args.n, start=600):
+for seed, task, e, c, out, tgt in honest_tasks(m, args.n, start=args.start):
     T = len(e.pre)
     rng = np.random.default_rng(seed)
     pos = [int(rng.integers(4, T))]
@@ -116,7 +118,7 @@ for seed, task, e, c, out, tgt in honest_tasks(m, args.n, start=600):
         print(f"{seed} vs {name:10s} ok={ok!s:5} nll={nll:.2f} '{o}' ranks={r.get('ranks')} "
               f"secret_med={np.median(r['secret_ranks']) if ok else '-'} "
               f"d32: all={d.get('all public', '-')} secret={d.get('secret', '-')} trace={d.get('trace', '-')} {r['sec']:.0f}s", flush=True)
-    save(f"defense_{args.model}.json", {"model": args.model, "layer": layer, "hide": args.hide,
+    save(f"defense_{args.model}{'_' + args.tag if args.tag else ''}.json", {"model": args.model, "layer": layer, "hide": args.hide,
                                          "budgets": BUDGETS, "records": recs,
                                          "minutes": (time.time() - t_start) / 60})
 print("done", (time.time() - t_start) / 60)
