@@ -164,8 +164,18 @@ def _vw_scores(m: Model, cache: Cache, a, T, mode="mean", n_sinks=4):
     return vw_score(a[..., :T].float(), vn, mode, n_sinks)
 
 
+def _trace_rows(m: Model, cache: Cache, pa, Q, T, n_sinks=4):
+    """Differentiable copy of the trace rows Model.columns(want_attn="trace") gives the verifier
+    for columns Q, from the forged prefill's own attention pa ([L, H, T, T])."""
+    vn = cache.V[:, :, :T].float().norm(dim=-1).repeat_interleave(m.H // m.Hkv, 1)  # [L, H, T]
+    c = pa[:, :, Q, :T].float() * vn[:, :, None, :]
+    c = c / c[..., n_sinks:].sum(-1, keepdim=True).clamp_min(1e-12)
+    return c.amax((0, 1))  # [|Q|, T]
+
+
 def stealth_forge(m: Model, pre, suf, tgt, layer: int, positions, hide_k: int = 4, steps=80, lr=0.1,
-                  rel_budget=1.0, lam=1.0, n_sinks=4, margin=0.7, stop_nll=0.05, score_mode="mean"):
+                  rel_budget=1.0, lam=1.0, n_sinks=4, margin=0.7, stop_nll=0.05, score_mode="mean",
+                  trace_first=12):
     """A forgery that knows the audit checks the `hide_k` most-read non-sink columns.
 
     Loss = answer NLL + lam * mean_j relu(log s_j - log(margin * s_thr)), where s_j is the
@@ -202,11 +212,24 @@ def stealth_forge(m: Model, pre, suf, tgt, layer: int, positions, hide_k: int = 
     for _ in range(steps):
         opt.zero_grad()
         d = delta()
-        _, c, _ = m.run(pre, resid_hook=lambda i, x: x.index_add(0, P, d.to(x.dtype)) if i == layer else x)
+        hook = lambda i, x: x.index_add(0, P, d.to(x.dtype)) if i == layer else x  # noqa: E731
+        _, c, pa = m.run(pre, resid_hook=hook, want_attn="full" if "trace" in modes else False)
         lg, _, a = m.run(readers, past=c, all_logits=True, want_attn="full")
         nll = F.cross_entropy(lg[len(suf) - 1:], torch.as_tensor(tgt, device=lg.device))
         hide, hidden = 0.0, True
-        for mode in modes:  # hide from every score the attacker knows the audit uses
+        if "trace" in modes:  # also stay out of what the most-read columns themselves read
+            pub = [md for md in modes if md != "trace"] or ["layermax"]
+            top = set()
+            for md in pub:
+                sc_ = _vw_scores(m, c, a, T, md, n_sinks).detach().clone()
+                sc_[:n_sinks] = -1
+                top |= set(sc_.topk(trace_first).indices.tolist())
+            Q = torch.as_tensor(sorted(top), device=m.device)
+            hop = _trace_rows(m, c, pa, Q, T, n_sinks).amax(0)  # [T]
+            thr = hop[others].detach().topk(hide_k).values[-1] * margin
+            hide = hide + torch.relu(torch.log(hop[P] + 1e-9) - torch.log(thr)).mean()
+            hidden = hidden and bool((hop[P].detach() < thr / margin).all())
+        for mode in [md for md in modes if md != "trace"]:  # hide from every score the audit uses
             s = _vw_scores(m, c, a, T, mode, n_sinks)
             thr = s[others].detach().topk(hide_k).values[-1] * margin
             hide = hide + torch.relu(torch.log(s[P] + 1e-9) - torch.log(thr)).mean()
