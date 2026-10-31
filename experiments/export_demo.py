@@ -16,7 +16,7 @@ import torch
 from common import ROOT, greedy, honest_tasks, says, verifier
 from kvnotary.attacks import edit_attack, flip_bit, forge_attack, stealth_forge
 from kvnotary.model import Model
-from kvnotary.verify import column_errors, influence
+from kvnotary.verify import SCORES, column_errors, influence, merge_plan, reader_attention, scores_from, trace_plan
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--model", default="llama-1b")
@@ -34,7 +34,11 @@ def pack(name, blurb, e, cache, task, extra=None):
     readers = list(e.suf) + list(oids[:-1])
     S = {k: influence(m, cache, readers, T, mode=k) for k in ("mean", "layermax")}
     rank = {k: np.argsort(-np.where(np.isfinite(s), s, 1e30)).tolist() for k, s in S.items()}
-    d = {"name": name, "blurb": blurb, "answer": out, "correct": says(out, task.answer),
+    a, vn = reader_attention(m, cache, readers, T)
+    pub = [scores_from(a, vn, md) for md in SCORES]
+    order_merged = merge_plan(pub, T)
+    trace = {str(B): trace_plan(m, e.pre, cache, pub, B) for B in range(8, 69, 4)}
+    d = {"order_merged": order_merged, "trace_plans": trace, "name": name, "blurb": blurb, "answer": out, "correct": says(out, task.answer),
          "hit_target": says(out, task.target),
          "score": [round(float(x), 3) for x in np.minimum(sc, 999)],
          "rank_mean": rank["mean"], "rank_layermax": rank["layermax"],
