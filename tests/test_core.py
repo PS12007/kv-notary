@@ -116,3 +116,28 @@ def test_expanded_kv_path_matches_gqa_path(pair):
     assert (lg - lg2).abs().max() < 1e-4
     assert (c2.K - c.K).abs().max() < 1e-4
     assert (c3.V - c.V[:, :, 70:]).abs().max() < 1e-4
+
+
+def test_score_family():
+    from kvnotary.verify import merge_plan, vw_score
+    torch.manual_seed(0)
+    L, H, n, T = 3, 4, 5, 40
+    a = torch.rand(L, H, n, T).softmax(-1).requires_grad_(True)
+    vn = torch.rand(L, H, T) + 0.5
+    c = a * vn[:, :, None, :]
+    per_layer = c.amax(1).sum(1)
+    assert torch.allclose(vw_score(a, vn, "mean"), per_layer.mean(0))
+    lm = per_layer / per_layer[:, 4:].sum(-1, keepdim=True)
+    assert torch.allclose(vw_score(a, vn, "layermax"), lm.amax(0))
+    mask = torch.zeros(L, H, dtype=torch.bool)
+    mask[1, 2] = True
+    w = torch.ones(L, H)
+    hm = c.sum(2) / c.sum(2)[..., 4:].sum(-1, keepdim=True)
+    assert torch.allclose(vw_score(a, vn, "secret", secret=(mask, w)), hm[1, 2])
+    for mode in ("mean", "layermax", "headmax", "tokmax"):
+        a.grad = None
+        vw_score(a, vn, mode)[10].backward()
+        assert a.grad.abs().sum() > 0
+    s1, s2 = np.arange(T, dtype=float), np.arange(T, dtype=float)[::-1].copy()
+    cols = merge_plan([s1, s2], 10)
+    assert cols[:4] == [0, 1, 2, 3] and len(set(cols)) == 10 and T - 1 in cols and 4 in cols
