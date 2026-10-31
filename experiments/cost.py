@@ -10,7 +10,8 @@ import numpy as np
 import torch
 
 from common import ROOT, save
-from kvnotary.model import Model
+from kvnotary.fast import GraphedAudit
+from kvnotary.model import Cache, Model
 from kvnotary.verify import column_errors, influence, trace_plan
 
 ap = argparse.ArgumentParser()
@@ -48,6 +49,15 @@ while T <= args.max_t:
     for k in (8, 16, 64):
         P = sorted(rng.choice(T, size=k, replace=False).tolist())
         r[f"cols{k}"] = timeit(lambda: column_errors(m, ids, c, P))
+    if T <= 4096:  # CUDA-graph audit, cache landed in its buffers (zero copy)
+        for k in (16, 64):
+            g = GraphedAudit(m, T, k)
+            g.K.copy_(c.K)
+            g.V.copy_(c.V)
+            landed, P = Cache(g.K, g.V), sorted(rng.choice(T, size=k, replace=False).tolist())
+            r[f"graph{k}"] = timeit(lambda: g(ids, landed, P))
+            del g, landed
+        torch.cuda.empty_cache()
     infl = influence(m, c, readers, T)
     r["trace32"] = timeit(lambda: trace_plan(m, ids, c, [infl], 32))  # picks 32 columns, audits 28 of them
     if T <= 4096:
