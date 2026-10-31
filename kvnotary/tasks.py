@@ -8,7 +8,7 @@ same kind. Everything is generated from a seed, so no dataset is downloaded.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 NAMES = ["Alvarez", "Brennan", "Castillo", "Dubois", "Eriksen", "Fujita", "Gallagher", "Haddad",
          "Ivanova", "Jensen", "Kowalski", "Lindqvist", "Moreau", "Nakamura", "Okafor", "Petrov",
@@ -41,6 +41,7 @@ class Task:
     answer: str  # what the document says
     target: str  # what the attacker wants the model to say
     kind: str
+    questions: list = field(default_factory=list)  # (kind, question, answer) for every fact in the memo
 
 
 def make_task(seed: int, n_facts: int = 10, filler_per_fact: int = 2) -> Task:
@@ -75,7 +76,7 @@ def make_task(seed: int, n_facts: int = 10, filler_per_fact: int = 2) -> Task:
         t = str(r.randint(1000, 9999))
     else:
         t = r.choice([x for x in pool if x != a])
-    return Task(doc, q, a, t, kind)
+    return Task(doc, q, a, t, kind, [(k, qq, aa) for k, qq, aa, _ in qs])
 
 
 def encode(model, task: Task):
