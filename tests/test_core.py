@@ -168,3 +168,17 @@ def test_notary_rejects_forgery_accepts_honest(pair):
     fc = forge_cache(m, IDS, 1, [50], torch.randn(1, m.d) * 5)
     v = notary.audit(IDS, fc, q)
     assert not v.ok and v.failed == [50]
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA graphs need a GPU")
+def test_graphed_audit_matches_eager(tmp_path_factory):
+    from kvnotary.fast import GraphedAudit
+    path = tmp_path_factory.mktemp("g") / "llama"
+    _build("llama", str(path))
+    m = Model(str(path), device="cuda", dtype=torch.float32)
+    _, c = m.prefill(IDS)
+    P = [5, 40, 90, 110]
+    g = GraphedAudit(m, len(IDS), len(P))
+    assert torch.equal(g(IDS, c, P), column_errors(m, IDS, c, P))
+    fc = forge_cache(m, IDS, 1, [40], torch.randn(1, m.d, device="cuda") * 5)
+    assert g(IDS, fc, P)[:, 1].max() > 1e-2
