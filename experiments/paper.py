@@ -556,7 +556,7 @@ LIMITS = """
 <li><b>Not a MAC.</b> The check proves that a cache is consistent with its tokens and weights. It says nothing about whether the tokens themselves are the right ones. That is the ordinary job of authenticating the prompt.</li>
 </ul>
 <h2>12. Conclusion</h2>
-<p>A KV cache can be checked against its tokens column by column, for the price of a few tokens. Every forgery in our experiments fails at the column where it was made, and honest caches pass. Where to check is the hard part. Against faults and non-adaptive tampering, the columns the question reads most are where the problem is: a few columns catch most single-column forgeries, at any document length. Against a white-box attacker that knows the rule, only random columns and full recompute give guarantees. That is a real trade-off, and serving systems that move caches between machines can now make it with numbers.</p>
+<p>A KV cache can be checked against its tokens column by column, for the price of a few tokens. Every forgery in our experiments fails at the column where it was made, and honest caches pass. Where to check is the hard part. Against faults and non-adaptive tampering, the columns the question reads most are where the problem is: a few columns catch most single-column forgeries, at any document length. Against a white-box attacker that knows the rule, any single score can be gamed. Tracing the audit through the cache, following what the read columns read, makes the attacker's job harder on both models we tested, but only random columns and full recompute give guarantees. That is a real trade-off, and serving systems that move caches between machines can now make it with numbers.</p>
 <h2>References</h2>
 <ol class="refs">
 <li>Zhong et al. DistServe: Disaggregating Prefill and Decoding for Goodput-optimized LLM Serving. OSDI 2024.</li>
@@ -601,7 +601,10 @@ def abstract():
             f"Choosing columns by the question's value-weighted attention catches {pct(ll['top']['8'])} of forgeries with 8 columns (Qwen2.5-0.5B: {pct(qw['top']['8'])}), "
             f"against {pct(ll['uni']['64'])} for 64 random columns" + (f", and {pct(lt['top']['32'])} with 32 columns at {lt['T']:.0f} tokens" if lt else "") + ". "
             f"Attacks that try to hide inside the bf16 tolerance usually fail or leave many columns failing, but one in 12 Qwen tasks fell to a forgery that stayed entirely inside it, so the tolerance itself is an attack surface that only deterministic kernels can close. A white-box attacker that knows the scoring rule can push its column down the ranking, "
-            f"so against adaptive adversaries only random audits give guarantees. Code, data and an interactive demo are public.</div>")
+            f"Hidden forgeries often reach the question through later columns that read them, so we also trace the audit: follow what the most-read columns "
+            f"themselves read, using attention rows the recomputation yields for free. In a game of 7 attackers against 10 audit plans, tracing is the only plan "
+            f"that holds the attacker's best reply well below the default on both models. No deterministic plan is a guarantee, and random columns remain the only "
+            f"attacker-independent one. Code, data and an interactive demo are public.</div>")
 
 
 html = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
