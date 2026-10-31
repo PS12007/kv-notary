@@ -62,14 +62,15 @@ kv-notary shows that this trust is easy to abuse and cheap to verify.
 
   | audit plan | Llama-3.2-1B | Qwen2.5-0.5B |
   |---|---|---|
-  | default (mean score) | 92% | 92% |
-  | 32 random columns | 93% | 90% |
-  | finest score (per head, layer, reader token) | **33%** | 75% |
-  | secret random head subset | 50% | 63% |
-  | **tracing** | 42% | **58%** |
+  | default (mean score) | 88% | 83% |
+  | 32 random columns | 93% | 91% |
+  | finest score (per head, layer, reader token) | **38%** | 58% |
+  | all four public scores merged | **38%** | 71% |
+  | secret random head subset | 47% | 55% |
+  | **tracing** | **38%** | **46%** |
 
-  *(share of tasks where the best attacker both flips the answer and escapes the audit; lower is better)*.
-  Tracing has the best worst case averaged over the two models. No deterministic plan is a guarantee.
+  *(share of 24 tasks per model where the best attacker both flips the answer and escapes the audit; lower is
+  better)*. Tracing is the only plan that is best or tied-best on both models. No deterministic plan is a guarantee.
 
   <p align="center"><img src="docs/figures/game.png" width="700"></p>
 
