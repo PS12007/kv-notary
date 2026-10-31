@@ -305,6 +305,11 @@ def adaptive_text():
                      f"and top-32 layermax catches {pct(vl['plans']['lm32'])}. The union of the top 16 under all three scores catches {pct(vl['ens']['16'])}, "
                      f"with about {vl['ens_cols']['16']:.0f} columns. This is the honest result: an attacker that knows the score can lower it. "
                      f"A deterministic top-k audit is an arms race, not a guarantee.</p>")
+    q = {r["key"]: r for r in ADA.get("qwen-0.5b", [])}.get((1, 1.0, 28, "layermax"))
+    if q and q["succ"]:
+        parts.append(f"<p>Qwen2.5-0.5B is easier to game. The same attacker succeeds in {q['succ']}/{q['n']} tasks, and top-32 layermax catches "
+                     f"{pct(q['plans']['lm32'])} of them, the ensemble {pct(q['ens']['16'])}. Only the random columns still find it, at the k/T rate "
+                     f"({pct(q['plans']['rand64'])} for 64).</p>")
     if sp and sp["succ"]:
         parts.append(f"<p><b>Spreading out costs the attacker detectability elsewhere.</b> With m&nbsp;=&nbsp;64 forged columns hidden from layermax top-12, "
                      f"it succeeds in {sp['succ']}/{sp['n']} tasks, but each of those caches has {sp['n_flagged']:.0f} failing columns, "
