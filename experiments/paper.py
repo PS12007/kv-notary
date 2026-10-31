@@ -448,6 +448,22 @@ def defense_text():
             "strong (" + ", ".join(f"tracing {w('trace', k, '64')} on {nm[k]}" for k in ks) + ") only because the attackers were not told about the larger "
             "budget. And all of these are games against our optimiser (150 Adam steps, one hinge loss per score), so the rates describe a modest white-box "
             "attacker, not a bound. Random columns give the only attacker-independent guarantee, and at k/T it is a weak one.</p>")
+    ex = []
+    for k in ks:
+        R = [r for r in DEF[k]["records"] if r["attacker"] == "all public + exact trace"]
+        if R:
+            ok = [r for r in R if r["success"]]
+            win = mean((1 - r["detect"]["32"]["trace"]) if r["success"] else 0.0 for r in R)
+            ex.append((nm[k], len(ok), len(R), mean(r["detect"]["32"]["trace"] for r in ok) if ok else float("nan"), win, G[k]["32"]["trace"][0]))
+    if ex:
+        find += ("<p><b>Round three: an attacker that knows the trace exactly.</b> We gave the forger a replay of the verifier's own trace plan "
+                 "(same budget, same rounds, same weights, on its own forged prefill), and a penalty whenever its column would be picked, on top of hiding from all four "
+                 "public scores. " + " ".join(
+                     f"On {n}, it succeeds in only {s_}/{n_} tasks; tracing catches {pct(c_)} of those, so it beats the traced audit in {pct(w_)} of tasks, "
+                     f"below the best reply to tracing among the other attackers ({pct(g_)})." for n, s_, n_, c_, w_, g_ in ex)
+                 + " Knowing the rule lets the attacker evade it, but satisfying it costs most of its success. A plausible reading, which we have not tested directly: "
+                 "the forged information has to reach the question through some column the question reads, and keeping every hop of that path quiet leaves little room to change the answer. "
+                 "The worst case for tracing is still set by simpler attackers.</p>")
     return ("<p><b>The game.</b> An audit plan is only as good as the attacker's best reply to it. For each plan, Table 6 gives the share of tasks in which the "
             "<i>best</i> of our attackers both flips the answer and escapes the audit (success rate × miss rate, maximised over attackers). "
             + ". ".join(notes) + ".</p>"

@@ -56,8 +56,9 @@ kv-notary shows that this trust is easy to abuse and cheap to verify.
 - **Round two: tracing is the most robust audit.** Hidden forgeries often reach the question *indirectly*:
   later columns read the forged one during prefill and carry its effect forward. So kv-notary can also
   *trace* the audit: after checking the most-read columns, follow what those columns themselves read, using
-  attention rows the recomputation produces anyway. We pitted 10 audit plans against 7 attackers, including
-  attackers that hide from all four public scores at once and from the tracing rule itself. Against the
+  attention rows the recomputation produces anyway. We pitted 10 audit plans against 8 attackers, including
+  attackers that hide from all four public scores at once and one that replays the verifier's exact tracing
+  procedure. Against the
   attacker's best reply at a 32-column budget:
 
   | audit plan | Llama-3.2-1B | Qwen2.5-0.5B |
@@ -70,7 +71,9 @@ kv-notary shows that this trust is easy to abuse and cheap to verify.
   | **tracing** | **38%** | **46%** |
 
   *(share of 24 tasks per model where the best attacker both flips the answer and escapes the audit; lower is
-  better)*. Tracing is the only plan that is best or tied-best on both models. No deterministic plan is a guarantee.
+  better)*. Tracing is the only plan that is best or tied-best on both models. The attacker that knows the exact
+  trace rule evades it when it succeeds, but succeeds in only 5–6 of 24 tasks, so it beats tracing less often
+  (17%, 25%) than simpler attackers do. No deterministic plan is a guarantee.
 
   <p align="center"><img src="docs/figures/game.png" width="700"></p>
 
