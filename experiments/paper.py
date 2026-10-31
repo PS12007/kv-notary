@@ -412,7 +412,8 @@ def defense_text():
             + ". ".join(notes) + ".</p>"
             + table(head, rows, "small")
             + "<p class='cap'>Table 6. Worst-case attacker win rate per audit plan (lower is better for the verifier), at audit budgets of 16, 32 and 64 columns.</p>"
-            "<p>Three findings. First, <b>the finest score is the hardest to game</b>. Per-reader-token value-weighted attention (tokmax) makes the attacker "
+            + fig("game", "Figure 6. The attacker's best reply to each 32-column audit plan: how often it both flips the answer and escapes the audit.")
+            + "<p>Three findings. First, <b>the finest score is the hardest to game</b>. Per-reader-token value-weighted attention (tokmax) makes the attacker "
             "keep its column quiet in every head of every layer for every question and answer token, while still moving the answer." + tok + " "
             "Second, <b>secrecy over heads buys little</b>. An attacker that hides from per-head scores keeps its column quiet in every head, and a secret subset "
             "of heads inherits that. Third, <b>tracing helps against some attackers and not others</b>. It catches forgeries that are laundered through later columns, "
@@ -465,7 +466,7 @@ def sec_innoise():
                  f"Tightening the threshold would catch it only at the price of false alarms on honest caches, whose worst score was {S.get(k, {}).get('honest_max', float('nan')):.2f} on this model. "
                  "The real fix is a smaller tolerance: batch-invariant, deterministic kernels in prefill and verification, or a verification precision the prefill also uses. "
                  "In fp32 (tested on Llama), every forgery of this kind lit up hundreds of columns.</p>")
-    t.append(fig("innoise", "Figure 6. In-tolerance attacks: success rate and the number of failing columns as the per-column budget grows."))
+    t.append(fig("innoise", "Figure 7. In-tolerance attacks: success rate and the number of failing columns as the per-column budget grows."))
     return "".join(t)
 
 
@@ -499,7 +500,7 @@ def sec_corrupt():
              f"Hardware faults are therefore the cheap case: a range check plus a small random audit covers them.</p>")
     t.append(table(["model", "bit", "flips", "output changed", "answer wrong", "check flags it", "range check fires"], brow, "small"))
     t.append("<p class='cap'>Table 9. Random single-bit flips by bit position (selected bits).</p>")
-    t.append(fig("corrupt", "Figure 7. Left: columns that fail after an in-place edit, by edited layer. Right: effect of a single bit flip by bit position."))
+    t.append(fig("corrupt", "Figure 8. Left: columns that fail after an in-place edit, by edited layer. Right: effect of a single bit flip by bit position."))
     return "".join(t)
 
 
@@ -526,7 +527,7 @@ def sec_cost():
         table(["T", "KV (MiB)", "prefill (ms)", "influence (ms)", "8 cols (ms)", "16 cols (ms)", "64 cols (ms)", "full check (ms)",
                "influence + 16 / prefill"], rows, "small"),
         "<p class='cap'>Table 10. Median wall-clock time of 5 runs.</p>",
-        fig("cost", "Figure 8. Time for prefill, a full check, and audits of 16 and 64 columns, by document length.")])
+        fig("cost", "Figure 9. Time for prefill, a full check, and audits of 16 and 64 columns, by document length.")])
 
 
 RELATED = """
