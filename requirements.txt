@@ -1,0 +1,6 @@
+torch>=2.3
+transformers>=4.45
+safetensors
+numpy
+matplotlib   # figures only
+pytest       # tests only
