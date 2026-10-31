@@ -20,6 +20,7 @@ import torch
 import torch.nn.functional as F
 
 from .model import Cache, Model
+from .verify import vw_score
 
 
 def answer_nll(m: Model, cache: Cache, suf, tgt, want_attn=False):
@@ -158,14 +159,9 @@ def forge_attack(m: Model, pre, suf, tgt, layer: int, positions, steps=60, lr=0.
 
 
 def _vw_scores(m: Model, cache: Cache, a, T, mode="mean", n_sinks=4):
-    """Differentiable copy of verify.influence (modes "mean" and "layermax")."""
-    g = m.H // m.Hkv
-    vn = cache.V[:, :, :T].float().norm(dim=-1).repeat_interleave(g, 1)
-    per_layer = (a[..., :T].float() * vn[:, :, None, :]).amax(1).sum(1)
-    if mode == "mean":
-        return per_layer.mean(0)
-    per_layer = per_layer / per_layer[:, n_sinks:].sum(-1, keepdim=True).clamp_min(1e-12)
-    return per_layer.amax(0)
+    """Differentiable audit score of the forged cache, as the verifier will compute it."""
+    vn = cache.V[:, :, :T].float().norm(dim=-1).repeat_interleave(m.H // m.Hkv, 1)
+    return vw_score(a[..., :T].float(), vn, mode, n_sinks)
 
 
 def stealth_forge(m: Model, pre, suf, tgt, layer: int, positions, hide_k: int = 4, steps=80, lr=0.1,
@@ -196,6 +192,7 @@ def stealth_forge(m: Model, pre, suf, tgt, layer: int, positions, hide_k: int = 
     others[:n_sinks] = False
     others[P] = False
     readers = list(suf) + list(tgt[:-1])
+    modes = [score_mode] if isinstance(score_mode, str) else list(score_mode)
 
     def delta():
         n = u.norm(dim=-1, keepdim=True).clamp_min(1e-9)
@@ -208,10 +205,12 @@ def stealth_forge(m: Model, pre, suf, tgt, layer: int, positions, hide_k: int = 
         _, c, _ = m.run(pre, resid_hook=lambda i, x: x.index_add(0, P, d.to(x.dtype)) if i == layer else x)
         lg, _, a = m.run(readers, past=c, all_logits=True, want_attn="full")
         nll = F.cross_entropy(lg[len(suf) - 1:], torch.as_tensor(tgt, device=lg.device))
-        s = _vw_scores(m, c, a, T, score_mode, n_sinks)
-        thr = s[others].detach().topk(hide_k).values[-1] * margin
-        hide = torch.relu(torch.log(s[P] + 1e-9) - torch.log(thr)).mean()
-        hidden = bool((s[P].detach() < thr / margin).all())
+        hide, hidden = 0.0, True
+        for mode in modes:  # hide from every score the attacker knows the audit uses
+            s = _vw_scores(m, c, a, T, mode, n_sinks)
+            thr = s[others].detach().topk(hide_k).values[-1] * margin
+            hide = hide + torch.relu(torch.log(s[P] + 1e-9) - torch.log(thr)).mean()
+            hidden = hidden and bool((s[P].detach() < thr / margin).all())
         if lam == 0:  # baseline: no hiding objective, so hiding plays no part in choosing the result
             hidden = True
         score = float(nll.detach()) + (0.0 if hidden else 10.0)
