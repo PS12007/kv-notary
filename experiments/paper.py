@@ -378,7 +378,8 @@ def sec_defense():
          "columns. So after auditing the most-read columns, the verifier follows what <i>they</i> read most (value-weighted, per head, max over layers), "
          "audits those, and repeats until the budget is spent (Algorithm: half the budget on merged public scores, the rest in rounds of B/8 traced columns).</p>",
          "<p>We test this against seven attackers that hide one forged column below the 28 most-read columns of one public score, of all four at once, "
-         "or of all four <i>and</i> the tracing rule itself, using a differentiable copy of the trace rows on the forged prefill. 12 tasks per model, "
+         "or of all four <i>and</i> the tracing rule itself, using a differentiable copy of the trace rows on the forged prefill. "
+         + f"{len({r['seed'] for r in DEF['llama-1b']['records']}) if DEF.get('llama-1b') else 0} tasks per model, "
          "150 Adam steps, middle layer, β = 1. Every plan audits exactly 32 columns, including the 4 sinks.</p>"]
     for k, name in MODELS:
         d = DEF[k]
@@ -584,10 +585,10 @@ RELATED = """
 LIMITS = """
 <h2>11. Limitations</h2>
 <ul>
-<li><b>Scale.</b> Two small models (0.5B and 1.1B parameters), memo-style factual QA with one-token-ish answers, and documents up to ~2K tokens (the attack backpropagates through the whole prefill, which did not fit in 8 GB at ~4K; the audit itself was timed up to 16K). Larger models have more layers and heads, so influence may concentrate differently.</li>
+<li><b>Scale.</b> Two small models (0.5B and 1.2B parameters), memo-style factual QA with one-token-ish answers, and documents up to ~2K tokens (the attack backpropagates through the whole prefill, which did not fit in 8 GB at ~4K; the audit itself was timed up to 16K). Larger models have more layers and heads, so influence may concentrate differently.</li>
 <li><b>Known question.</b> The attacker optimises for a question it anticipates, and our audit reads the influence of the question actually asked. An attacker that has to work across many questions has a harder job, and an audit across many questions has more readers. We did not measure either.</li>
 <li><b>Determinism.</b> The tolerance τ is calibrated on our own kernels. A real deployment with heterogeneous prefill and decode hardware would need calibration across kernel pairs, and τ would grow.</li>
-<li><b>Adaptive attacker.</b> Our adaptive forger is white-box but simple: one hinge loss and 100 Adam steps. Stronger optimisers will hide better. §6 should be read as a lower bound on what an adaptive attacker can do.</li>
+<li><b>Adaptive attacker.</b> Our adaptive forgers are white-box but simple: one hinge loss per score and 100–150 Adam steps. Stronger optimisers will hide better. §6 should be read as a lower bound on what an adaptive attacker can do.</li>
 <li><b>Not a MAC.</b> The check proves that a cache is consistent with its tokens and weights. It says nothing about whether the tokens themselves are the right ones. That is the ordinary job of authenticating the prompt.</li>
 </ul>
 <h2>12. Conclusion</h2>
@@ -617,7 +618,7 @@ h3{font:600 16px system-ui,sans-serif;margin:22px 0 6px}.sub{color:#555;font:14p
 table{border-collapse:collapse;margin:14px 0 4px;font:13px system-ui,sans-serif;width:100%}
 th,td{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left;vertical-align:top}th{border-bottom:2px solid #999}
 table.small{font-size:11.5px}.cap{font:12.5px system-ui,sans-serif;color:#555;margin-top:2px}
-figure{margin:18px 0}figure img{width:100%}figcaption{font:12.5px system-ui,sans-serif;color:#555}
+figure{margin:18px 0;text-align:center}figure img{max-width:100%;height:auto}figcaption{text-align:left}figcaption{font:12.5px system-ui,sans-serif;color:#555}
 code{font-size:13px}.refs{font-size:13.5px}
 @media print{body{margin:0 auto;font-size:11pt}h2{break-after:avoid}figure,table{break-inside:avoid}}
 """
