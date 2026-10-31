@@ -49,10 +49,28 @@ kv-notary shows that this trust is easy to abuse and cheap to verify.
   usually fails or breaks hundreds of columns. But in 1 of 12 Qwen tasks it flipped the answer with every
   column inside tolerance, which no audit can catch. Closing that gap needs deterministic kernels, not a
   smarter audit (in fp32 the same attacks light up hundreds of columns).
-- **Adaptive attackers win the deterministic part.** A white-box forger that knows the scoring rule can
-  push its column out of the top 30 and still flip the answer in about half of the tasks. Different scores
-  disagree about where it lands, so an ensemble helps, but only the random part of an audit gives a
-  guarantee against this attacker. This is the main limitation, and the paper measures it in detail.
+- **Adaptive attackers can game any one score.** A white-box forger that knows the scoring rule can push
+  its column out of the top 30 and still flip the answer in about half of the tasks.
+- **Round two: tracing is the most robust audit.** Hidden forgeries often reach the question *indirectly*:
+  later columns read the forged one during prefill and carry its effect forward. So kv-notary can also
+  *trace* the audit: after checking the most-read columns, follow what those columns themselves read, using
+  attention rows the recomputation produces anyway. We pitted 10 audit plans against 7 attackers, including
+  attackers that hide from all four public scores at once and from the tracing rule itself. Against the
+  attacker's best reply at a 32-column budget:
+
+  | audit plan | Llama-3.2-1B | Qwen2.5-0.5B |
+  |---|---|---|
+  | default (mean score) | 92% | 92% |
+  | 32 random columns | 93% | 90% |
+  | finest score (per head, layer, reader token) | **33%** | 75% |
+  | secret random head subset | 50% | 63% |
+  | **tracing** | 42% | **58%** |
+
+  *(share of tasks where the best attacker both flips the answer and escapes the audit; lower is better)*.
+  Tracing is the only plan that does well on both models. No deterministic plan is a guarantee.
+
+  <p align="center"><img src="docs/figures/game.png" width="700"></p>
+
 - **Cost:** at 16K tokens, the influence pass plus 16 audited columns take 6% of the prefill time on an RTX
   5060 Laptop GPU.
 
