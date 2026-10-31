@@ -306,8 +306,36 @@ def fig_defense(B="32"):
 
 
 
+def fig_game(B="32"):
+    ds = [(mk, lab, load(f"defense_{mk}.json")) for mk, lab in MODELS]
+    ds = [x for x in ds if x[2]]
+    if not ds:
+        return
+    plans = [p for p in DEF_PLANS]
+    fig, ax = plt.subplots(figsize=(7.4, 4.0))
+    y = np.arange(len(plans))
+    h = 0.38
+    for i, ((mk, lab, d), col) in enumerate(zip(ds, (C["blue"], C["orange"]))):
+        R = d["records"]
+        atts = sorted(set(r["attacker"] for r in R))
+        wins = []
+        for pk, _ in plans:
+            wins.append(max(np.mean([(1 - r["detect"][B][pk]) if r["success"] else 0.0 for r in R if r["attacker"] == a]) for a in atts))
+        ax.barh(y + (i - 0.5) * h, wins, h * 0.92, color=col, label=lab)
+        for yy, w in zip(y + (i - 0.5) * h, wins):
+            ax.text(w + 0.01, yy, f"{100 * w:.0f}%", va="center", fontsize=7.5, color=C["ink2"])
+    ax.set_yticks(y, [x[1].replace("|", " ") for x in plans], fontsize=8.5)
+    ax.invert_yaxis()
+    ax.set_xlim(0, 1.08)
+    ax.set_xlabel(f"attacker's best reply: P(answer flipped and audit of {B} columns misses it)")
+    ax.grid(axis="y", visible=False)
+    ax.legend(fontsize=8.5, loc="upper center", bbox_to_anchor=(0.5, -0.13), ncol=2)
+    ax.set_title("Which audit is hardest to game? (lower is better)")
+    save(fig, "game")
+
+
 if __name__ == "__main__":
-    for f in (fig_forge_success, fig_budget, fig_detection, fig_corrupt, fig_adaptive, fig_innoise, fig_cost, fig_defense):
+    for f in (fig_forge_success, fig_budget, fig_detection, fig_corrupt, fig_adaptive, fig_innoise, fig_cost, fig_defense, fig_game):
         try:
             f()
         except Exception as ex:  # keep going: partial results are normal mid-run
