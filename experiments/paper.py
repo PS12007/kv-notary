@@ -402,24 +402,33 @@ def defense_text():
         notes.append(f"On {name}, against a 32-column audit the attacker's best reply wins {pct(g['mean'][0])} of the time if the verifier uses the default "
                      f"mean score, {pct(g['random'][0])} against random columns, and {pct(g[best][0])} against the best plan, "
                      f"<i>{dict(DEF_PLANS)[best]}</i> (its best reply there: <i>{'no hiding' if g[best][1] == 'none' else 'hides from ' + g[best][1]}</i>)")
-    k0 = next(iter(G))
-    st = def_stats(DEF[k0])
-    tm = st.get("tokmax")
-    tok = (f" An attacker that optimises directly against tokmax on {dict(MODELS)[k0]} succeeds in only {tm['succ']}/{tm['n']} tasks "
-           f"and is still caught {pct(tm['det']['tokmax'])} of the time by it." if tm and tm["succ"] else "")
+    def w(pk, k, B="32"):
+        return pct(G[k][B][pk][0]) if k in G else "–"
+    ks = [k for k, _ in MODELS if k in G]
+    nm = {k: dict(MODELS)[k] for k in ks}
+    find = ("<p><b>What holds on both models.</b> "
+            f"(1) The default mean score is the easiest to game: the best reply beats a 32-column mean audit " + " and ".join(f"{w('mean', k)} of the time on {nm[k]}" for k in ks)
+            + ", no better than 32 random columns (" + ", ".join(w('random', k) for k in ks) + "). "
+            "(2) No single public score is robust across models. The finest one, tokmax (per head, layer and reader token), holds the attacker to "
+            + " but ".join(f"{w('tokmax', k)} on {nm[k]}" for k in ks) + ". "
+            "(3) Tracing is the most consistent plan: " + " and ".join(f"{w('trace', k)} on {nm[k]}" for k in ks)
+            + ". It does not rely on any one score, but follows the path the forged information has to take to reach the question. "
+            "The attacker that also optimises against the trace rule did exactly as well as the one that ignores it, in success and in detection. "
+            "Our differentiable copy of the trace covers one hop from a fixed set of read columns, while the verifier keeps following hops until its budget "
+            "runs out; a stronger trace-aware attacker is the obvious next step. "
+            "(4) Secret head subsets help only modestly (" + ", ".join(w('secret', k) for k in ks) + "): an attacker that is quiet in every head "
+            "is quiet in any subset of them.</p>"
+            "<p>Two caveats. The attackers hide below rank 28, which matches the 32-column budget. At 64 columns every attention-based plan looks "
+            "strong (" + ", ".join(f"tracing {w('trace', k, '64')} on {nm[k]}" for k in ks) + ") only because the attackers were not told about the larger "
+            "budget. And all of these are games against our optimiser (150 Adam steps, one hinge loss per score), so the rates describe a modest white-box "
+            "attacker, not a bound. Random columns give the only attacker-independent guarantee, and at k/T it is a weak one.</p>")
     return ("<p><b>The game.</b> An audit plan is only as good as the attacker's best reply to it. For each plan, Table 6 gives the share of tasks in which the "
             "<i>best</i> of our seven attackers both flips the answer and escapes the audit (success rate × miss rate, maximised over attackers). "
             + ". ".join(notes) + ".</p>"
             + table(head, rows, "small")
             + "<p class='cap'>Table 6. Worst-case attacker win rate per audit plan (lower is better for the verifier), at audit budgets of 16, 32 and 64 columns.</p>"
             + fig("game", "Figure 6. The attacker's best reply to each 32-column audit plan: how often it both flips the answer and escapes the audit.")
-            + "<p>Three findings. First, <b>the finest score is the hardest to game</b>. Per-reader-token value-weighted attention (tokmax) makes the attacker "
-            "keep its column quiet in every head of every layer for every question and answer token, while still moving the answer." + tok + " "
-            "Second, <b>secrecy over heads buys little</b>. An attacker that hides from per-head scores keeps its column quiet in every head, and a secret subset "
-            "of heads inherits that. Third, <b>tracing helps against some attackers and not others</b>. It catches forgeries that are laundered through later columns, "
-            "but in our runs it does not beat the best public score at equal budget. The deterministic plans all remain games against a known optimiser. "
-            "Our attackers are 150 Adam steps with one hinge loss per score, so these rates are what a modest white-box attacker achieves, not a bound. "
-            "Random columns give the only attacker-independent guarantee, and at k/T it is a weak one.</p>")
+            + find)
 
 
 def sec_innoise():
