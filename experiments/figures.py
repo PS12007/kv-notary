@@ -251,6 +251,8 @@ def fig_cost():
     ax.plot(T, [r["prefill"] * 1e3 for r in rows], "-o", color=C["ink2"], label="full prefill (recompute)")
     ax.plot(T, [(r["cols16"] + r["influence"]) * 1e3 for r in rows], "-o", color=C["blue"], label="audit: 16 columns + scoring")
     ax.plot(T, [(r["cols64"] + r["influence"]) * 1e3 for r in rows], "-o", color=C["aqua"], label="audit: 64 columns + scoring")
+    if "trace32" in rows[0]:
+        ax.plot(T, [(r["trace32"] + r["influence"]) * 1e3 for r in rows], "-o", color=C["violet"], label="traced audit: 32 columns + scoring")
     ax.set_xscale("log", base=2)
     ax.set_yscale("log")
     ax.set_xticks(T, [f"{t // 1024}K" if t >= 1024 else str(t) for t in T])
