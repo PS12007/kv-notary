@@ -372,33 +372,53 @@ def sec_defense():
     return "".join(t)
 
 
+def game(d, B):
+    """Attacker's best reply per plan: max over attackers of P(answer flips and audit misses)."""
+    R = d["records"]
+    atts = [a for a in DEF_ATT if any(r["attacker"] == a for r in R)]
+    out = {}
+    for pk, _ in DEF_PLANS:
+        w = {a: mean((1 - r["detect"][B][pk]) if r["success"] else 0.0 for r in R if r["attacker"] == a) for a in atts}
+        a = max(w, key=w.get)
+        out[pk] = (w[a], a)
+    return out
+
+
 def defense_text():
-    parts = []
+    rows, notes = [], []
+    G = {k: {B: game(DEF[k], B) for B in ("16", "32", "64")} for k, _ in MODELS if DEF[k]}
+    for pk, lab in DEF_PLANS:
+        row = [lab]
+        for k, name in MODELS:
+            if k in G:
+                row += [f"{100 * G[k][B][pk][0]:.0f}%" for B in ("16", "32", "64")]
+        rows.append(row)
+    head = ["audit plan"] + [f"{name.split('-')[0]} B={B}" for k, name in MODELS if k in G for B in ("16", "32", "64")]
     for k, name in MODELS:
-        d = DEF[k]
-        if not d:
+        if k not in G:
             continue
-        st = def_stats(d)
-        hid = [a for a in DEF_ATT[1:] if a in st and st[a]["succ"]]
-        if not hid:
-            continue
-        pub = mean(st[a]["det"]["all public"] for a in hid)
-        sec = mean(st[a]["det"]["secret"] for a in hid)
-        tr = mean(st[a]["det"]["trace"] for a in hid)
-        rnd = mean(st[a]["det"]["random"] for a in hid)
-        worst = min(hid, key=lambda a: st[a]["det"]["trace"])
-        parts.append(f"{name}: averaged over the six hiding attackers, the merged public scores catch {pct(pub)}, the secret score {pct(sec)}, "
-                     f"tracing {pct(tr)} and 32 random columns {pct(rnd)}; tracing does worst against <i>hides from {worst}</i> "
-                     f"({pct(st[worst]['det']['trace'])})")
-    if not parts:
-        return ""
-    return ("<p>" + ". ".join(parts) + ".</p>"
-            "<p>Secret randomisation over heads helps little: an attacker that hides from per-head scores keeps its column quiet in every head, "
-            "and a secret subset of heads inherits that. Tracing works because it targets the path the attack has to take. To change the answer, "
-            "the forged column's information must reach the question, and if it does not arrive directly it arrives through columns the question reads, "
-            "which read the forged column. Hiding from that path costs the attacker more than hiding from any single score. "
-            "Tracing is still deterministic, so a strong enough attacker could aim at it; in our runs, the attacker that optimises against the trace rule "
-            "as well is the one to compare. Random columns remain the only part of an audit with a guarantee that does not depend on the attacker's skill.</p>")
+        g = G[k]["32"]
+        best = min(g, key=lambda pk: g[pk][0])
+        notes.append(f"On {name}, against a 32-column audit the attacker's best reply wins {pct(g['mean'][0])} of the time if the verifier uses the default "
+                     f"mean score, {pct(g['random'][0])} against random columns, and {pct(g[best][0])} against the best plan, "
+                     f"<i>{dict(DEF_PLANS)[best]}</i> (its best reply there: <i>{'no hiding' if g[best][1] == 'none' else 'hides from ' + g[best][1]}</i>)")
+    k0 = next(iter(G))
+    st = def_stats(DEF[k0])
+    tm = st.get("tokmax")
+    tok = (f" An attacker that optimises directly against tokmax on {dict(MODELS)[k0]} succeeds in only {tm['succ']}/{tm['n']} tasks "
+           f"and is still caught {pct(tm['det']['tokmax'])} of the time by it." if tm and tm["succ"] else "")
+    return ("<p><b>The game.</b> An audit plan is only as good as the attacker's best reply to it. For each plan, Table 6 gives the share of tasks in which the "
+            "<i>best</i> of our seven attackers both flips the answer and escapes the audit (success rate × miss rate, maximised over attackers). "
+            + ". ".join(notes) + ".</p>"
+            + table(head, rows, "small")
+            + "<p class='cap'>Table 6. Worst-case attacker win rate per audit plan (lower is better for the verifier), at audit budgets of 16, 32 and 64 columns.</p>"
+            "<p>Three findings. First, <b>the finest score is the hardest to game</b>. Per-reader-token value-weighted attention (tokmax) makes the attacker "
+            "keep its column quiet in every head of every layer for every question and answer token, while still moving the answer." + tok + " "
+            "Second, <b>secrecy over heads buys little</b>. An attacker that hides from per-head scores keeps its column quiet in every head, and a secret subset "
+            "of heads inherits that. Third, <b>tracing helps against some attackers and not others</b>. It catches forgeries that are laundered through later columns, "
+            "but in our runs it does not beat the best public score at equal budget. The deterministic plans all remain games against a known optimiser. "
+            "Our attackers are 150 Adam steps with one hinge loss per score, so these rates are what a modest white-box attacker achieves, not a bound. "
+            "Random columns give the only attacker-independent guarantee, and at k/T it is a weak one.</p>")
 
 
 def sec_innoise():
@@ -417,7 +437,7 @@ def sec_innoise():
                          f"{r['min_flag_succ']}" if r["min_flag_succ"] is not None else "–", f"{r['max']:.1f}"])
     t.append(table(["model", "dtype", "attack", "ρ or ε", "success", "failing columns (mean)", "fewest failing when it worked",
                     "median max score"], rows, "small"))
-    t.append("<p class='cap'>Table 6. Attacks that try to stay inside the bf16 (or fp32) tolerance.</p>")
+    t.append("<p class='cap'>Table 7. Attacks that try to stay inside the bf16 (or fp32) tolerance.</p>")
     lines, silent = [], []
     for (k, dt), g in INN.items():
         works = [(key, r) for key, r in g.items() if r["succ"] > 0]
@@ -463,7 +483,7 @@ def sec_corrupt():
              "That holds at every layer except the last, which no later layer reads. "
              "So these edits are loud, and even a single random column usually catches them.</p>")
     t.append(table(["model", "edited layer", "success", "failing columns (median)", "of later columns", "random 1", "random 4"], rows, "small"))
-    t.append("<p class='cap'>Table 7. In-place edits of one column (24 per row: 12 tasks × 2 positions).</p>")
+    t.append("<p class='cap'>Table 8. In-place edits of one column (24 per row: 12 tasks × 2 positions).</p>")
     brow = []
     for k, c in COR.items():
         for b in (15, 14, 13, 7, 0):
@@ -478,7 +498,7 @@ def sec_corrupt():
              f"The full column check flags {pct(lc['flag_any'])} of all flips, including harmless ones. "
              f"Hardware faults are therefore the cheap case: a range check plus a small random audit covers them.</p>")
     t.append(table(["model", "bit", "flips", "output changed", "answer wrong", "check flags it", "range check fires"], brow, "small"))
-    t.append("<p class='cap'>Table 8. Random single-bit flips by bit position (selected bits).</p>")
+    t.append("<p class='cap'>Table 9. Random single-bit flips by bit position (selected bits).</p>")
     t.append(fig("corrupt", "Figure 7. Left: columns that fail after an in-place edit, by edited layer. Right: effect of a single bit flip by bit position."))
     return "".join(t)
 
@@ -505,7 +525,7 @@ def sec_cost():
         "Our implementation is plain PyTorch with explicit attention for the audited rows. The prefill uses SDPA.</p>",
         table(["T", "KV (MiB)", "prefill (ms)", "influence (ms)", "8 cols (ms)", "16 cols (ms)", "64 cols (ms)", "full check (ms)",
                "influence + 16 / prefill"], rows, "small"),
-        "<p class='cap'>Table 9. Median wall-clock time of 5 runs.</p>",
+        "<p class='cap'>Table 10. Median wall-clock time of 5 runs.</p>",
         fig("cost", "Figure 8. Time for prefill, a full check, and audits of 16 and 64 columns, by document length.")])
 
 
