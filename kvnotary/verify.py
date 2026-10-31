@@ -198,6 +198,40 @@ def merge_plan(scores, budget, n_sinks=4):
     return cols
 
 
+@torch.no_grad()
+def trace_plan(m: Model, ids, cache: Cache, scores, budget, first=None, step=None, n_sinks=4):
+    """Audit plan that follows information backwards through the cache.
+
+    A forger can keep its column out of the question's direct attention by letting later
+    columns read it and carry its effect forward; the question then reads those (honest-looking)
+    columns. So: audit `first` columns by the merged public scores, then repeatedly audit the
+    `step` unaudited columns that the audited ones read most (value-weighted, per head, max over
+    layers and heads, weighted by how important the reader was), until `budget` columns.
+    The attention rows come from the recomputation the audit does anyway.
+    """
+    T = len(ids)
+    first = first or budget // 2
+    step = step or max(2, budget // 8)
+    cols = merge_plan(scores, first, n_sinks)
+    w = {c: 1.0 for c in cols[n_sinks:]}
+    todo, hop = list(cols[n_sinks:]), np.zeros(T)
+    while len(cols) < budget:
+        if todo:
+            tr = m.columns(ids, cache, todo, want_attn="trace")[2].cpu().numpy()
+            for q, row in zip(todo, tr):
+                hop = np.maximum(hop, w[q] * row)
+        cand = hop.copy()
+        cand[cols] = -1
+        nxt = [int(j) for j in np.argsort(-cand)[: budget - len(cols)][:step] if cand[j] > 0]
+        if not nxt:
+            break
+        for j in nxt:
+            w[j] = cand[j] / cand[nxt[0]]
+        cols += nxt
+        todo = nxt
+    return cols
+
+
 def influence(m: Model, cache: Cache, readers, T, n_sinks=4, mode="mean"):
     """How much the trusted readers (question + answer tokens) draw from each document column.
 
