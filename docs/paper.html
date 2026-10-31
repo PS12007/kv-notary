@@ -21,7 +21,7 @@ code{font-size:13px}.refs{font-size:13.5px}
 <ol>
 <li><b>How little of a cache must change to change an answer?</b> One column, at any depth (§4).</li>
 <li><b>Can the reader check a cache without recomputing it?</b> Yes. Recomputing a column against the <i>claimed</i> cache costs one token through the model, and a cache is honest if and only if every column passes (§3). Auditing the columns the question reads most catches non-adaptive forgeries with a few columns (§5).</li>
-<li><b>Where does the check break?</b> Against a white-box attacker who knows how audit columns are chosen (§6). It does not break inside the bf16 tolerance (§7).</li>
+<li><b>Where does the check break?</b> Against a white-box attacker who knows how audit columns are chosen (§6), and, rarely, inside the bf16 tolerance itself (§7).</li>
 </ol>
 
 <h2>2. Threat model</h2>
