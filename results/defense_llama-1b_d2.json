@@ -1,0 +1,164 @@
+{
+ "model": "llama-1b",
+ "layer": 8,
+ "hide": 28,
+ "budgets": [
+  16,
+  32,
+  64
+ ],
+ "records": [
+  {
+   "seed": 710,
+   "attacker": "all public + exact trace",
+   "pos": [
+    189
+   ],
+   "T": 459,
+   "success": false,
+   "nll": 7.112511157989502,
+   "out": "Project Nimbus",
+   "target": "Orchid",
+   "sec": 29.573224782943726
+  },
+  {
+   "seed": 711,
+   "attacker": "all public + exact trace",
+   "pos": [
+    166
+   ],
+   "T": 469,
+   "success": true,
+   "nll": 0.6113665103912354,
+   "out": "4554",
+   "target": "4554",
+   "n_flagged": 1,
+   "ranks": {
+    "mean": 58,
+    "layermax": 85,
+    "headmax": 112,
+    "tokmax": 57,
+    "grad": 81
+   },
+   "secret_ranks": [
+    153,
+    23,
+    69,
+    43,
+    252,
+    61,
+    129,
+    108,
+    166,
+    196,
+    69,
+    97,
+    84,
+    84,
+    118,
+    90,
+    80,
+    189,
+    63,
+    53,
+    64,
+    131,
+    146,
+    176,
+    30,
+    105,
+    75,
+    128,
+    112,
+    98,
+    129,
+    22
+   ],
+   "detect": {
+    "16": {
+     "mean": 0.0,
+     "layermax": 0.0,
+     "headmax": 0.0,
+     "tokmax": 0.0,
+     "grad": 0.0,
+     "all public": 0.0,
+     "secret": 0.0,
+     "secret + public": 0.0,
+     "half public + half random": 0.017353579175609646,
+     "trace": 0.0,
+     "trace + random": 0.02580645161320194,
+     "random": 0.03411513859348014
+    },
+    "32": {
+     "mean": 0.0,
+     "layermax": 0.0,
+     "headmax": 0.0,
+     "tokmax": 0.0,
+     "grad": 0.0,
+     "all public": 0.0,
+     "secret": 0.0625,
+     "secret + public": 0.0,
+     "half public + half random": 0.03532008830032407,
+     "trace": 0.0,
+     "trace + random": 0.03532008830032407,
+     "random": 0.0682302771863047
+    },
+    "64": {
+     "mean": 1.0,
+     "layermax": 0.0,
+     "headmax": 0.0,
+     "tokmax": 1.0,
+     "grad": 0.0,
+     "all public": 0.0,
+     "secret": 0.15625,
+     "secret + public": 0.0625,
+     "half public + half random": 0.0732265446219591,
+     "trace": 1.0,
+     "trace + random": 0.0732265446219591,
+     "random": 0.13646055437131221
+    }
+   },
+   "sec": 30.489371061325073
+  },
+  {
+   "seed": 713,
+   "attacker": "all public + exact trace",
+   "pos": [
+    224
+   ],
+   "T": 455,
+   "success": false,
+   "nll": 5.0019097328186035,
+   "out": "Project Meridian",
+   "target": "Tundra",
+   "sec": 28.99781894683838
+  },
+  {
+   "seed": 714,
+   "attacker": "all public + exact trace",
+   "pos": [
+    445
+   ],
+   "T": 471,
+   "success": false,
+   "nll": 7.644138336181641,
+   "out": "Project Meridian",
+   "target": "Sable",
+   "sec": 62.00790452957153
+  },
+  {
+   "seed": 715,
+   "attacker": "all public + exact trace",
+   "pos": [
+    166
+   ],
+   "T": 439,
+   "success": false,
+   "nll": 9.98395824432373,
+   "out": "6033",
+   "target": "4234",
+   "sec": 26.643240451812744
+  }
+ ],
+ "minutes": 2.9852842847506205
+}
