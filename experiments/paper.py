@@ -338,20 +338,33 @@ def sec_innoise():
     t.append(table(["model", "dtype", "attack", "ρ or ε", "success", "failing columns (mean)", "fewest failing when it worked",
                     "median max score"], rows, "small"))
     t.append("<p class='cap'>Table 5. Attacks that try to stay inside the bf16 (or fp32) tolerance.</p>")
-    lines = []
+    lines, silent = [], []
     for (k, dt), g in INN.items():
         works = [(key, r) for key, r in g.items() if r["succ"] > 0]
         if works:
             (mode, x), r = min(works, key=lambda w: w[1]["min_flag_succ"])
             f, T = r["min_flag_succ"], r["T"]
+            if f == 0:
+                silent.append((k, dt, mode, x, r))
+                continue
             p16, p64 = 1 - (1 - f / T) ** 16, 1 - (1 - f / T) ** 64
             lines.append(f"{dict(MODELS)[k]} {dt}: the quietest successful attack ({mode}, {'ρ' if mode == 'edit' else 'ε'} = {x:g}) "
                          f"left {f} of {T:.0f} columns failing, which 16 random columns would catch with probability {pct(p16)} and 64 with {pct(p64)}")
-    t.append("<p>Neither attacker flips an answer with every column inside the tolerance. " + "; ".join(lines) + ". "
-             "Below the tolerance (ρ = 0.1, ε ≤ 0.003 in bf16) nothing succeeded. The narrow band between is where the attacker does best, "
-             "and the reason it is narrow is that §4 needed perturbations on the order of the residual norm, while the tolerance is a few percent of it. "
-             "Spreading the change over 400 columns does not change that: attention averages the nudges, so effective spread attacks break many columns at once, "
-             "which is exactly what random columns are good at. In fp32 the tolerance is ~10<sup>−6</sup> and every attack lit up almost every column.</p>")
+    t.append("<p>" + "; ".join(lines) + ". "
+             "Below the tolerance (ρ = 0.1, ε ≤ 0.003 in bf16) nothing succeeded on Llama. The band between the tolerance and an effective attack is narrow, "
+             "because §4 needed perturbations on the order of the residual norm while the tolerance is a few percent of it, and spreading the change over 400 columns "
+             "does not change that: attention averages the nudges, so effective spread attacks usually break many columns at once, which is exactly what random columns are good at. "
+             "In fp32 the tolerance is ~10<sup>−6</sup> and every attack lit up almost every column.</p>")
+    for k, dt, mode, x, r in silent:
+        n_silent = sum(1 for rec in load(f"innoise_{k}_{dt}")["records"]
+                       if rec["success"] and rec["n_flagged"] == 0)
+        n_tasks = len({rec["seed"] for rec in load(f"innoise_{k}_{dt}")["records"]})
+        t.append(f"<p><b>But the tolerance is an attack surface.</b> On {dict(MODELS)[k]} ({dt}), {n_silent} of {n_tasks} tasks fell to a distributed forgery "
+                 f"(ε = {x:g}) that flipped the answer with <i>every</i> column inside the tolerance: its worst column scored just under 1. "
+                 "No column audit, however chosen, can catch that cache, because by the verifier's own standard it is honest. "
+                 f"Tightening the threshold would catch it only at the price of false alarms on honest caches, whose worst score was {S.get(k, {}).get('honest_max', float('nan')):.2f} on this model. "
+                 "The real fix is a smaller tolerance: batch-invariant, deterministic kernels in prefill and verification, or a verification precision the prefill also uses. "
+                 "In fp32 (tested on Llama), every forgery of this kind lit up hundreds of columns.</p>")
     t.append(fig("innoise", "Figure 5. In-tolerance attacks: success rate and the number of failing columns as the per-column budget grows."))
     return "".join(t)
 
@@ -477,7 +490,7 @@ def abstract():
             f"In {pct(ll['only_forged'], 1)} of successful forgeries this flags exactly the forged column, and no honest cache was flagged. "
             f"Choosing columns by the question's value-weighted attention catches {pct(ll['top']['8'])} of forgeries with 8 columns (Qwen2.5-0.5B: {pct(qw['top']['8'])}), "
             f"against {pct(ll['uni']['64'])} for 64 random columns" + (f", and {pct(lt['top']['32'])} with 32 columns at {lt['T']:.0f} tokens" if lt else "") + ". "
-            f"Attacks that try to hide inside the bf16 tolerance either fail or leave several columns failing, where random audits find them. A white-box attacker that knows the scoring rule can push its column down the ranking, "
+            f"Attacks that try to hide inside the bf16 tolerance usually fail or leave many columns failing, but one in 12 Qwen tasks fell to a forgery that stayed entirely inside it, so the tolerance itself is an attack surface that only deterministic kernels can close. A white-box attacker that knows the scoring rule can push its column down the ranking, "
             f"so against adaptive adversaries only random audits give guarantees. Code, data and an interactive demo are public.</div>")
 
 
