@@ -38,6 +38,8 @@ h1 em { font-style: normal; color: var(--blue); }
 .links a:hover { border-color: var(--blue); }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 30px 0 0; }
 .stat { background: var(--panel); padding: 16px; }
+.tryit { font-size: 14px; color: var(--ink2); }
+.tryit a { color: var(--blue); }
 .stat b { display: block; font: 600 28px "IBM Plex Mono", monospace; letter-spacing: -0.02em; }
 .stat span { font-size: 13px; color: var(--ink2); line-height: 1.35; display: block; margin-top: 4px; }
 section { padding: 40px 0 8px; }
@@ -105,6 +107,7 @@ footer { color: var(--muted); font-size: 13px; padding: 40px 0 60px; border-top:
 <section id="demo">
   <h2>Audit a cache</h2>
   <p>A memo is cached, and later a trusted node asks a question about it. Pick a cache and see what the model answers from it. Then audit it: recompute some of its columns from the tokens and compare. Shading shows how much the question and answer read each token. Everything here was computed with the real models; the page only replays it.</p>
+  <p class="tryit">Try the stealth forgery, which hides from every public score: <a href="#qwen-0.5b/stealth/merged/28/0/run">audit 32 columns by the public scores</a> (it slips through), then <a href="#qwen-0.5b/stealth/trace/28/0/run">trace what those columns read</a> (it does not).</p>
   <div class="panel">
     <div class="row seg" id="models"><span class="label">model</span></div>
     <div class="row seg" id="scen" style="margin-top:10px"><span class="label">cache</span></div>
@@ -266,7 +269,10 @@ print(verdict)  # REJECT (columns [212] disagree with their tokens); checked 28 
 
   function load() {
     if (data[model]) return render();
-    fetch(`data/demo_${model}.json`).then(r => r.json()).then(d => { data[model] = d; render(); });
+    fetch(`data/demo_${model}.json`).then(r => r.json()).then(d => {
+      data[model] = d; render();
+      if (autoRun) { autoRun = false; $("demo").scrollIntoView(); audit(); }
+    });
   }
   const PLANS = [["layermax", "most-read"], ["merged", "all scores merged"], ["trace", "trace what they read"]];
   let planName = "layermax";
@@ -274,6 +280,19 @@ print(verdict)  # REJECT (columns [212] disagree with their tokens); checked 28 
   drawPlans();
   $("go").onclick = audit;
   $("truth").onchange = render;
+  window.addEventListener("hashchange", () => location.reload());
+  // shareable state: #model/scenario/plan[/top/random][/run]
+  let autoRun = false;
+  (() => {
+    const h = decodeURIComponent(location.hash.slice(1)).split("/").filter(Boolean);
+    if (!h.length) return;
+    if (MODELS.some(x => x[0] === h[0])) model = h[0];
+    if (h[1]) scen = h[1];
+    if (h[2] && PLANS.some(x => x[0] === h[2])) { planName = h[2]; drawPlans(); }
+    if (h[3] && !isNaN(+h[3])) $("kt").value = h[3];
+    if (h[4] && !isNaN(+h[4])) $("kr").value = h[4];
+    autoRun = h.includes("run");
+  })();
   const upd = () => { $("ktv").textContent = $("kt").value; $("krv").textContent = $("kr").value; };
   $("kt").oninput = upd; $("kr").oninput = upd; upd();
   load();
