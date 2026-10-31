@@ -321,6 +321,86 @@ def adaptive_text():
     return "".join(parts)
 
 
+DEF_ATT = ["none", "mean", "layermax", "headmax", "tokmax", "all public", "all public + trace"]
+DEF_PLANS = [("mean", "mean"), ("layermax", "layermax"), ("headmax", "headmax"), ("tokmax", "tokmax"), ("grad", "gradient"),
+             ("all public", "all public merged"), ("secret", "secret heads"), ("trace", "trace"),
+             ("trace + random", "trace + random"), ("random", "random")]
+DEF = {k: load(f"defense_{k}") for k, _ in MODELS}
+
+
+def def_stats(d, B="32"):
+    out = {}
+    for a in DEF_ATT:
+        rs = [r for r in d["records"] if r["attacker"] == a]
+        ok = [r for r in rs if r["success"]]
+        if not rs:
+            continue
+        out[a] = {"n": len(rs), "succ": len(ok),
+                  "det": {pk: mean(r["detect"][B][pk] for r in ok) if ok else float("nan") for pk, _ in DEF_PLANS}}
+    return out
+
+
+def sec_defense():
+    if not any(DEF.values()):
+        return ""
+    t = ["<h3>6.1 Round two: audits the attacker cannot see</h3>",
+         "<p>Two things stand out in Table 4. Different scores disagree about where a hidden column lands, and in 25–60% of successful hidden "
+         "forgeries, putting the honest column back does <i>not</i> restore the answer. The forgery has been <i>laundered</i>: later columns read the "
+         "forged one during prefill, carry its effect forward, and the question reads them instead. Those later columns are consistent with their "
+         "inputs, so they pass the check. This suggests two defenses. The first is scores the attacker cannot optimise against: finer ones (per head, "
+         "per reader token) and a <b>secret</b> one, a random quarter of the heads with random weights, drawn by the verifier for each audit. "
+         "The second is <b>tracing</b>. The audit recomputes its columns anyway, and the recomputation yields each column's own attention to earlier "
+         "columns. So after auditing the most-read columns, the verifier follows what <i>they</i> read most (value-weighted, per head, max over layers), "
+         "audits those, and repeats until the budget is spent (Algorithm: half the budget on merged public scores, the rest in rounds of B/8 traced columns).</p>",
+         "<p>We test this against seven attackers that hide one forged column below the 28 most-read columns of one public score, of all four at once, "
+         "or of all four <i>and</i> the tracing rule itself, using a differentiable copy of the trace rows on the forged prefill. 12 tasks per model, "
+         "150 Adam steps, middle layer, β = 1. Every plan audits exactly 32 columns, including the 4 sinks.</p>"]
+    for k, name in MODELS:
+        d = DEF[k]
+        if not d:
+            continue
+        st = def_stats(d)
+        rows = []
+        for a, x in st.items():
+            lab = "no hiding" if a == "none" else "hides from " + a
+            rows.append([lab, f"{x['succ']}/{x['n']}"] + [pct(x["det"][pk]) if x["succ"] else "–" for pk, _ in DEF_PLANS])
+        t += [f"<h3>{name}</h3>", table(["attacker", "success"] + [lab for _, lab in DEF_PLANS], rows, "small")]
+    t.append("<p class='cap'>Table 5. Probability that a 32-column audit catches a successful forgery, by attacker (rows) and audit plan (columns). "
+             "Secret: mean over 32 secret draws. Random parts are exact hypergeometric probabilities.</p>")
+    t.append(defense_text())
+    t.append(fig("defense", "Figure 5. Round two of the arms race. Each cell: share of successful forgeries a 32-column audit catches."))
+    return "".join(t)
+
+
+def defense_text():
+    parts = []
+    for k, name in MODELS:
+        d = DEF[k]
+        if not d:
+            continue
+        st = def_stats(d)
+        hid = [a for a in DEF_ATT[1:] if a in st and st[a]["succ"]]
+        if not hid:
+            continue
+        pub = mean(st[a]["det"]["all public"] for a in hid)
+        sec = mean(st[a]["det"]["secret"] for a in hid)
+        tr = mean(st[a]["det"]["trace"] for a in hid)
+        rnd = mean(st[a]["det"]["random"] for a in hid)
+        worst = min(hid, key=lambda a: st[a]["det"]["trace"])
+        parts.append(f"{name}: averaged over the six hiding attackers, the merged public scores catch {pct(pub)}, the secret score {pct(sec)}, "
+                     f"tracing {pct(tr)} and 32 random columns {pct(rnd)}; tracing does worst against <i>hides from {worst}</i> "
+                     f"({pct(st[worst]['det']['trace'])})")
+    if not parts:
+        return ""
+    return ("<p>" + ". ".join(parts) + ".</p>"
+            "<p>Secret randomisation over heads helps little: an attacker that hides from per-head scores keeps its column quiet in every head, "
+            "and a secret subset of heads inherits that. Tracing works because it targets the path the attack has to take. To change the answer, "
+            "the forged column's information must reach the question, and if it does not arrive directly it arrives through columns the question reads, "
+            "which read the forged column. Hiding from that path costs the attacker more than hiding from any single score. "
+            "Tracing is still deterministic, so a strong enough attacker could aim at it; in our runs, the attacker that optimises against the trace rule "
+            "as well is the one to compare. Random columns remain the only part of an audit with a guarantee that does not depend on the attacker's skill.</p>")
+
+
 def sec_innoise():
     if not INN:
         return ""
@@ -337,7 +417,7 @@ def sec_innoise():
                          f"{r['min_flag_succ']}" if r["min_flag_succ"] is not None else "–", f"{r['max']:.1f}"])
     t.append(table(["model", "dtype", "attack", "ρ or ε", "success", "failing columns (mean)", "fewest failing when it worked",
                     "median max score"], rows, "small"))
-    t.append("<p class='cap'>Table 5. Attacks that try to stay inside the bf16 (or fp32) tolerance.</p>")
+    t.append("<p class='cap'>Table 6. Attacks that try to stay inside the bf16 (or fp32) tolerance.</p>")
     lines, silent = [], []
     for (k, dt), g in INN.items():
         works = [(key, r) for key, r in g.items() if r["succ"] > 0]
@@ -365,7 +445,7 @@ def sec_innoise():
                  f"Tightening the threshold would catch it only at the price of false alarms on honest caches, whose worst score was {S.get(k, {}).get('honest_max', float('nan')):.2f} on this model. "
                  "The real fix is a smaller tolerance: batch-invariant, deterministic kernels in prefill and verification, or a verification precision the prefill also uses. "
                  "In fp32 (tested on Llama), every forgery of this kind lit up hundreds of columns.</p>")
-    t.append(fig("innoise", "Figure 5. In-tolerance attacks: success rate and the number of failing columns as the per-column budget grows."))
+    t.append(fig("innoise", "Figure 6. In-tolerance attacks: success rate and the number of failing columns as the per-column budget grows."))
     return "".join(t)
 
 
@@ -383,7 +463,7 @@ def sec_corrupt():
              "That holds at every layer except the last, which no later layer reads. "
              "So these edits are loud, and even a single random column usually catches them.</p>")
     t.append(table(["model", "edited layer", "success", "failing columns (median)", "of later columns", "random 1", "random 4"], rows, "small"))
-    t.append("<p class='cap'>Table 6. In-place edits of one column (24 per row: 12 tasks × 2 positions).</p>")
+    t.append("<p class='cap'>Table 7. In-place edits of one column (24 per row: 12 tasks × 2 positions).</p>")
     brow = []
     for k, c in COR.items():
         for b in (15, 14, 13, 7, 0):
@@ -398,8 +478,8 @@ def sec_corrupt():
              f"The full column check flags {pct(lc['flag_any'])} of all flips, including harmless ones. "
              f"Hardware faults are therefore the cheap case: a range check plus a small random audit covers them.</p>")
     t.append(table(["model", "bit", "flips", "output changed", "answer wrong", "check flags it", "range check fires"], brow, "small"))
-    t.append("<p class='cap'>Table 7. Random single-bit flips by bit position (selected bits).</p>")
-    t.append(fig("corrupt", "Figure 6. Left: columns that fail after an in-place edit, by edited layer. Right: effect of a single bit flip by bit position."))
+    t.append("<p class='cap'>Table 8. Random single-bit flips by bit position (selected bits).</p>")
+    t.append(fig("corrupt", "Figure 7. Left: columns that fail after an in-place edit, by edited layer. Right: effect of a single bit flip by bit position."))
     return "".join(t)
 
 
@@ -425,8 +505,8 @@ def sec_cost():
         "Our implementation is plain PyTorch with explicit attention for the audited rows. The prefill uses SDPA.</p>",
         table(["T", "KV (MiB)", "prefill (ms)", "influence (ms)", "8 cols (ms)", "16 cols (ms)", "64 cols (ms)", "full check (ms)",
                "influence + 16 / prefill"], rows, "small"),
-        "<p class='cap'>Table 8. Median wall-clock time of 5 runs.</p>",
-        fig("cost", "Figure 7. Time for prefill, a full check, and audits of 16 and 64 columns, by document length.")])
+        "<p class='cap'>Table 9. Median wall-clock time of 5 runs.</p>",
+        fig("cost", "Figure 8. Time for prefill, a full check, and audits of 16 and 64 columns, by document length.")])
 
 
 RELATED = """
@@ -503,6 +583,7 @@ html = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name
 {sec_forge()}
 {sec_detect()}
 {sec_adaptive()}
+{sec_defense()}
 {sec_innoise()}
 {sec_corrupt()}
 {sec_cost()}
